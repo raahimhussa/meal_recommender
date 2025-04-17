@@ -1,9 +1,0 @@
-*.egg
-
-# Python cache
-__pycache__/
-*.pyc
-
-# Notes
-notes.txt
-*.md 

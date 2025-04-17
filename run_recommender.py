@@ -91,26 +91,8 @@ def get_user_preferences():
     """Get basic user preferences"""
     print("\nLet's set up your meal preferences:")
     
-    # Get dietary restrictions
-    print("\nDo you have any dietary restrictions?")
-    print("1. None")
-    print("2. Vegetarian")
-    print("3. Vegan")
-    print("4. Gluten-free")
-    
-    while True:
-        try:
-            choice = int(input("Enter your choice (1-4): "))
-            if 1 <= choice <= 4:
-                restrictions = {
-                    1: [],
-                    2: ['Vegetarian'],
-                    3: ['Vegan'],
-                    4: ['Gluten-free']
-                }
-                return restrictions[choice]
-        except ValueError:
-            print("Please enter a valid number (1-4).")
+    # No dietary restrictions needed
+    return []
 
 def get_meal_recommendations(recommender, user_id, user_prefs, meal_time, target_calories, macros):
     """Get meal recommendations for a specific time"""
@@ -190,32 +172,108 @@ def get_daily_meal_plan(recommender, user_id, user_prefs):
     
     return daily_plan
 
+def get_weight_goal():
+    """Get user's weight goal"""
+    print("\nWhat is your weight goal?")
+    print("1. Maintain Weight")
+    print("2. Lose Weight")
+    print("3. Gain Weight")
+    
+    while True:
+        try:
+            choice = int(input("Enter your choice (1-3): "))
+            if choice == 1:
+                return 'maintain'
+            elif choice == 2:
+                return 'lose'
+            elif choice == 3:
+                return 'gain'
+            else:
+                print("Please enter a number between 1 and 3.")
+        except ValueError:
+            print("Please enter a valid number.")
+
 def main():
     try:
         # Load the recommender system
         recommender = MealRecommender("test2.json")
+
+        # Get user's weight goal
+        goal = get_weight_goal()
         
-        # Get user preferences
-        dietary_restrictions = get_user_preferences()
-        
-        # Define base preferences
+        # Define base preferences with goal
         user_prefs = {
-            'goal': 'maintain',
+            'goal': goal,
             'allergies': [],  # No allergies to start with
             'exercise': 'Regular exercise',
             'preferred_locations': [],  # No location restrictions
             'novelty_factor': 0.5,
-            'dietary_restrictions': dietary_restrictions
+            'dietary_restrictions': []
         }
 
         user_id = "student_123"
 
-        # Get daily meal plan for selected meals
-        daily_plan = get_daily_meal_plan(recommender, user_id, user_prefs)
+        # Get daily meal plan
+        print("\nFinding the best meal combination for your nutrition requirements...")
+        recommendations = recommender.get_recommendations(user_id, user_prefs, num_recommendations=3)
         
-        if not daily_plan:
-            print("\nNo meal plan could be created. Please try again later.")
-            return
+        if recommendations:
+            print("\n=== Your Daily Meal Plan ===")
+            total_calories = 0
+            total_protein = 0
+            total_carbs = 0
+            total_fat = 0
+            
+            for i, meal in enumerate(recommendations, 1):
+                # Safely get meal details with defaults
+                meal_name = meal.get('mealName', 'Unnamed Meal')
+                restaurant = meal.get('restaurantName', 'Unknown Restaurant')
+                calories = meal.get('calories', 0)
+                protein = meal.get('protein', 0)
+                carbs = meal.get('carbohydrate', 0)
+                fat = meal.get('fat', 0)
+                
+                print(f"\nMeal {i}: {meal_name} from {restaurant}")
+                print(f"Calories: {calories}")
+                print(f"Protein: {protein}g")
+                print(f"Carbs: {carbs}g")
+                print(f"Fat: {fat}g")
+                
+                # Sum up totals
+                total_calories += calories
+                total_protein += protein
+                total_carbs += carbs
+                total_fat += fat
+            
+            print("\n=== Daily Totals ===")
+            print(f"Total Calories: {total_calories}")
+            print(f"Total Protein: {total_protein}g")
+            print(f"Total Carbs: {total_carbs}g")
+            print(f"Total Fat: {total_fat}g")
+            
+            # Calculate macro percentages
+            if total_calories > 0:
+                print("\n=== Macro Distribution ===")
+                print(f"Protein: {(total_protein * 4 / total_calories) * 100:.1f}%")
+                print(f"Carbs: {(total_carbs * 4 / total_calories) * 100:.1f}%")
+                print(f"Fat: {(total_fat * 9 / total_calories) * 100:.1f}%")
+            
+            # Display match quality information
+            if recommendations and 'match_quality' in recommendations[0]:
+                print("\n=== Match Quality ===")
+                match_quality = recommendations[0]['match_quality']
+                print(f"Goal: {match_quality['goal']}")
+                print(f"Calories: {match_quality['calories']}")
+                print(f"Protein: {match_quality['protein']}")
+                print(f"Carbs: {match_quality['carbs']}")
+                print(f"Fat: {match_quality['fat']}")
+                print("\nTarget Ranges:")
+                print(f"Protein: {match_quality['target_ranges']['protein']}")
+                print(f"Carbs: {match_quality['target_ranges']['carbs']}")
+                print(f"Fat: {match_quality['target_ranges']['fat']}")
+                print(f"Overall Match: {match_quality['overall_match']}")
+        else:
+            print("\nNo meal combinations found. Please try adjusting your targets or dietary restrictions.")
 
     except FileNotFoundError:
         print("Error: Could not find the meal data file (test2.json)")
@@ -223,6 +281,8 @@ def main():
         print("Error: Invalid JSON format in the meal data file")
     except Exception as e:
         print(f"An unexpected error occurred: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
