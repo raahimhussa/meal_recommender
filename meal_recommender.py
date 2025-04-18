@@ -36,7 +36,6 @@ class MealRecommender:
         
         self.preprocess_data()
         self.initialize_models()
-        self.user_history = defaultdict(set)  # Track user meal history
         
     def load_data(self, json_file):
         """Load and parse the JSON data"""
@@ -99,11 +98,35 @@ class MealRecommender:
         # Calculate similarity matrix
         self.similarity_matrix = cosine_similarity(self.tfidf_matrix)
     
-    def get_recommendations(self, user_id, preferences, num_recommendations=3):
+    def load_weekly_history(self):
+        """Load weekly meal history from file"""
+        try:
+            with open("weekly_history.json", "r") as f:
+                weekly_data = json.load(f)
+                for user_id, meals in weekly_data.items():
+                    self.weekly_meals[user_id] = set(meals)
+        except FileNotFoundError:
+            # File doesn't exist yet, that's okay
+            pass
+        except Exception as e:
+            print(f"Error loading weekly history: {str(e)}")
+    
+    def save_weekly_history(self):
+        """Save weekly meal history to file"""
+        try:
+            weekly_data = {user_id: list(meals) for user_id, meals in self.weekly_meals.items()}
+            with open("weekly_history.json", "w") as f:
+                json.dump(weekly_data, f)
+        except Exception as e:
+            print(f"Error saving weekly history: {str(e)}")
+    
+    def reset_weekly_history(self, user_id):
+        """Reset weekly meal history for a user"""
+        self.weekly_meals[user_id].clear()
+        self.save_weekly_history()
+    
+    def get_recommendations(self, user_id, preferences, num_recommendations=3, day_number=None):
         """Get personalized meal recommendations based on weight goal and nutrition requirements"""
-        # Load user history
-        self.load_history(user_id)
-        
         # Get user's goal and calculate target ranges
         goal = preferences.get('goal', 'maintain').lower()
         
@@ -141,25 +164,8 @@ class MealRecommender:
         # Calculate target calories per meal (divide by 3 for breakfast, lunch, dinner)
         target_calories_per_meal = target_calories / 3
         
-        # Calculate target macros in grams per meal
-        target_macros_per_meal = {
-            'protein': {
-                'min': (target_calories_per_meal * macro_ranges['protein']['min']) / 4,  # 4 calories per gram
-                'max': (target_calories_per_meal * macro_ranges['protein']['max']) / 4
-            },
-            'carbs': {
-                'min': (target_calories_per_meal * macro_ranges['carbs']['min']) / 4,    # 4 calories per gram
-                'max': (target_calories_per_meal * macro_ranges['carbs']['max']) / 4
-            },
-            'fat': {
-                'min': (target_calories_per_meal * macro_ranges['fat']['min']) / 9,      # 9 calories per gram
-                'max': (target_calories_per_meal * macro_ranges['fat']['max']) / 9
-            }
-        }
-        
         # Filter meals based on preferences
         filtered_meals = []
-        # print(f"\nTotal meals available: {len(self.meals)}")
         
         for meal in self.meals:
             # Skip meals with no nutrition data
@@ -193,8 +199,6 @@ class MealRecommender:
                 continue
                 
             filtered_meals.append(portioned_meal)
-        
-        # print(f"Meals after basic filtering: {len(filtered_meals)}")
         
         if not filtered_meals:
             print("No meals passed basic filtering. Using all meals...")
@@ -242,12 +246,13 @@ class MealRecommender:
             ideal_portion = target_calories_per_meal * 0.3  # Target 30% of meal calories
             calorie_score = 1 - min(abs(meal_calories - ideal_portion) / (ideal_portion * 2), 1)  # Even more lenient
             
-            # Calculate overall score
-            overall_score = (macro_score * 0.6 + calorie_score * 0.4)  # More weight on calories
+            # Add random factor for variety
+            random_factor = random.uniform(0.8, 1.2)
+            
+            # Calculate overall score with random factor
+            overall_score = (macro_score * 0.6 + calorie_score * 0.4) * random_factor
             
             scored_meals.append((overall_score, meal))
-        
-        # print(f"Meals after scoring: {len(scored_meals)}")
         
         # Sort by score
         scored_meals.sort(reverse=True, key=lambda x: x[0])
@@ -257,8 +262,6 @@ class MealRecommender:
         all_recommendations = []
         
         for meal_time in meal_times:
-            # print(f"\nFinding {meal_time} recommendations...")
-            
             # Filter meals for this meal time
             time_filtered_meals = [(score, meal) for score, meal in scored_meals 
                                  if meal_time.lower() in meal.get('mealType', '').lower()]
@@ -269,13 +272,9 @@ class MealRecommender:
             
             # Try different combinations of meals
             for num_meals in range(2, 4):  # Try 2 or 3 meals
-                top_meals = time_filtered_meals[:100]  # Consider top 100 meals for combinations
-                # print(f"\nTrying combinations of {num_meals} meals from top {len(top_meals)} meals...")
-                # print(f"Target calories per meal: {target_calories_per_meal:.0f}")
-                # print(f"Target macro ranges:")
-                # print(f"Protein: {macro_ranges['protein']['min']*100:.0f}-{macro_ranges['protein']['max']*100:.0f}%")
-                # print(f"Carbs: {macro_ranges['carbs']['min']*100:.0f}-{macro_ranges['carbs']['max']*100:.0f}%")
-                # print(f"Fat: {macro_ranges['fat']['min']*100:.0f}-{macro_ranges['fat']['max']*100:.0f}%")
+                # Randomly select from top 100 meals for variety
+                top_meals = time_filtered_meals[:100]
+                random.shuffle(top_meals)
                 
                 combinations_tried = 0
                 valid_combinations = 0
@@ -366,16 +365,6 @@ class MealRecommender:
                             best_total_match = total_match_score
                             best_combination = meal_combination
                             valid_combinations += 1
-                            
-                            # Print debug info for the best combination so far
-                            # print(f"\nFound better combination (score: {combination_score:.2f}):")
-                            # print(f"Restaurant: {restaurant}")
-                            # print(f"Total Calories: {total_calories:.0f}")
-                            # print(f"Protein: {protein_percent*100:.1f}%")
-                            # print(f"Carbs: {carbs_percent*100:.1f}%")
-                            # print(f"Fat: {fat_percent*100:.1f}%")
-                
-                # print(f"\nTried {combinations_tried} combinations, found {valid_combinations} valid ones")
             
             # If we found any valid combinations, create a combined meal
             if best_combination:
@@ -418,73 +407,7 @@ class MealRecommender:
                     'overall_match': f"Score: {best_total_score:.2f}"
                 }
                 
-                # Update and save history
-                for _, meal in best_combination:
-                    self.user_history[user_id].add(meal['mealId'])
-                self.save_history(user_id)
-                
                 all_recommendations.append(combined_meal)
-            else:
-                # Fallback to single items if no good combinations found
-                if time_filtered_meals:
-                    # Take top 2-3 meals that together don't exceed calorie target
-                    fallback_meals = []
-                    total_calories = 0
-                    
-                    for _, meal in time_filtered_meals[:10]:  # Look at top 10 meals
-                        meal_calories = meal.get('calories', 0)
-                        if total_calories + meal_calories <= target_calories_per_meal * 1.2:
-                            fallback_meals.append(meal)
-                            total_calories += meal_calories
-                            if len(fallback_meals) >= 2 and total_calories >= target_calories_per_meal * 0.8:
-                                break
-                    
-                    if len(fallback_meals) >= 2:
-                        # Create a combined meal from the fallback meals
-                        combined_meal = {
-                            'mealName': ' + '.join(meal['mealName'] for meal in fallback_meals),
-                            'restaurantName': fallback_meals[0].get('restaurantName', 'Unknown Restaurant'),
-                            'calories': sum(meal.get('calories', 0) for meal in fallback_meals),
-                            'protein': sum(meal.get('protein', 0) for meal in fallback_meals),
-                            'carbohydrate': sum(meal.get('carbohydrate', 0) for meal in fallback_meals),
-                            'fat': sum(meal.get('fat', 0) for meal in fallback_meals),
-                            'ingredients': list(set(ing for meal in fallback_meals for ing in meal.get('ingredients', []))),
-                            'allergens': list(set(allergen for meal in fallback_meals for allergen in meal.get('allergens', []))),
-                            'sub_meals': fallback_meals,
-                            'mealType': meal_time
-                        }
-                        
-                        # Calculate final macro percentages
-                        final_calories = combined_meal['calories']
-                        final_protein = combined_meal['protein']
-                        final_carbs = combined_meal['carbohydrate']
-                        final_fat = combined_meal['fat']
-                        
-                        final_protein_percent = (final_protein * 4 / final_calories) * 100
-                        final_carbs_percent = (final_carbs * 4 / final_calories) * 100
-                        final_fat_percent = (final_fat * 9 / final_calories) * 100
-                        
-                        # Add match quality information
-                        combined_meal['match_quality'] = {
-                            'calories': f"{final_calories}/{target_calories_per_meal:.0f} ({((final_calories/target_calories_per_meal)*100):.1f}%)",
-                            'protein': f"{final_protein}g ({final_protein_percent:.1f}%)",
-                            'carbs': f"{final_carbs}g ({final_carbs_percent:.1f}%)",
-                            'fat': f"{final_fat}g ({final_fat_percent:.1f}%)",
-                            'goal': goal.capitalize(),
-                            'target_ranges': {
-                                'protein': f"{macro_ranges['protein']['min']*100:.0f}-{macro_ranges['protein']['max']*100:.0f}%",
-                                'carbs': f"{macro_ranges['carbs']['min']*100:.0f}-{macro_ranges['carbs']['max']*100:.0f}%",
-                                'fat': f"{macro_ranges['fat']['min']*100:.0f}-{macro_ranges['fat']['max']*100:.0f}%"
-                            },
-                            'overall_match': "Fallback combination"
-                        }
-                        
-                        # Update and save history
-                        for meal in fallback_meals:
-                            self.user_history[user_id].add(meal['mealId'])
-                        self.save_history(user_id)
-                        
-                        all_recommendations.append(combined_meal)
         
         return all_recommendations  # Return all three meals
     

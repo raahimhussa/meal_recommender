@@ -213,76 +213,81 @@ def main():
 
         user_id = "student_123"
 
-        # Get daily meal plan
-        print("\nFinding the best meal combination for your nutrition requirements...")
-        recommendations = recommender.get_recommendations(user_id, user_prefs, num_recommendations=3)
+        # Generate 7-day meal plan
+        print("\nGenerating your 7-day meal plan...")
         
-        if recommendations:
-            print("\n=== Your Daily Meal Plan ===")
-            total_calories = 0
-            total_protein = 0
-            total_carbs = 0
-            total_fat = 0
+        for day in range(1, 8):
+            print(f"\n=== Day {day} ===")
+            print("Finding the best meal combination for your nutrition requirements...")
             
-            # Map meal types to display names
-            meal_type_names = {
-                'breakfast': 'Breakfast',
-                'lunch': 'Lunch',
-                'dinner': 'Dinner'
-            }
+            # Get recommendations for the day
+            recommendations = recommender.get_recommendations(user_id, user_prefs, num_recommendations=3)
             
-            for i, meal in enumerate(recommendations, 1):
-                # Safely get meal details with defaults
-                meal_name = meal.get('mealName', 'Unnamed Meal')
-                restaurant = meal.get('restaurantName', 'Unknown Restaurant')
-                calories = meal.get('calories', 0)
-                protein = meal.get('protein', 0)
-                carbs = meal.get('carbohydrate', 0)
-                fat = meal.get('fat', 0)
-                meal_type = meal.get('mealType', 'unknown').lower()
-                display_name = meal_type_names.get(meal_type, f'Meal {i}')
+            if recommendations:
+                total_calories = 0
+                total_protein = 0
+                total_carbs = 0
+                total_fat = 0
                 
-                print(f"\n{display_name}: {meal_name} from {restaurant}")
-                print(f"Calories: {calories}")
-                print(f"Protein: {protein}g")
-                print(f"Carbs: {carbs}g")
-                print(f"Fat: {fat}g")
+                # Map meal types to display names
+                meal_type_names = {
+                    'breakfast': 'Breakfast',
+                    'lunch': 'Lunch',
+                    'dinner': 'Dinner'
+                }
                 
-                # Sum up totals
-                total_calories += calories
-                total_protein += protein
-                total_carbs += carbs
-                total_fat += fat
-            
-            print("\n=== Daily Totals ===")
-            print(f"Total Calories: {total_calories}")
-            print(f"Total Protein: {total_protein}g")
-            print(f"Total Carbs: {total_carbs}g")
-            print(f"Total Fat: {total_fat}g")
-            
-            # Calculate macro percentages
-            if total_calories > 0:
-                print("\n=== Macro Distribution ===")
-                print(f"Protein: {(total_protein * 4 / total_calories) * 100:.1f}%")
-                print(f"Carbs: {(total_carbs * 4 / total_calories) * 100:.1f}%")
-                print(f"Fat: {(total_fat * 9 / total_calories) * 100:.1f}%")
-            
-            # Display match quality information
-            if recommendations and 'match_quality' in recommendations[0]:
-                print("\n=== Match Quality ===")
-                match_quality = recommendations[0]['match_quality']
-                print(f"Goal: {match_quality['goal']}")
-                print(f"Calories: {match_quality['calories']}")
-                print(f"Protein: {match_quality['protein']}")
-                print(f"Carbs: {match_quality['carbs']}")
-                print(f"Fat: {match_quality['fat']}")
-                print("\nTarget Ranges:")
-                print(f"Protein: {match_quality['target_ranges']['protein']}")
-                print(f"Carbs: {match_quality['target_ranges']['carbs']}")
-                print(f"Fat: {match_quality['target_ranges']['fat']}")
-                print(f"Overall Match: {match_quality['overall_match']}")
-        else:
-            print("\nNo meal combinations found. Please try adjusting your targets or dietary restrictions.")
+                for i, meal in enumerate(recommendations, 1):
+                    # Safely get meal details with defaults
+                    meal_name = meal.get('mealName', 'Unnamed Meal')
+                    restaurant = meal.get('restaurantName', 'Unknown Restaurant')
+                    calories = meal.get('calories', 0)
+                    protein = meal.get('protein', 0)
+                    carbs = meal.get('carbohydrate', 0)
+                    fat = meal.get('fat', 0)
+                    meal_type = meal.get('mealType', 'unknown').lower()
+                    display_name = meal_type_names.get(meal_type, f'Meal {i}')
+                    
+                    print(f"\n{display_name}: {meal_name} from {restaurant}")
+                    print(f"Calories: {calories}")
+                    print(f"Protein: {protein}g")
+                    print(f"Carbs: {carbs}g")
+                    print(f"Fat: {fat}g")
+                    
+                    # Sum up totals
+                    total_calories += calories
+                    total_protein += protein
+                    total_carbs += carbs
+                    total_fat += fat
+                
+                print("\n=== Daily Totals ===")
+                print(f"Total Calories: {total_calories}")
+                print(f"Total Protein: {total_protein}g")
+                print(f"Total Carbs: {total_carbs}g")
+                print(f"Total Fat: {total_fat}g")
+                
+                # Calculate macro percentages
+                if total_calories > 0:
+                    print("\n=== Macro Distribution ===")
+                    print(f"Protein: {(total_protein * 4 / total_calories) * 100:.1f}%")
+                    print(f"Carbs: {(total_carbs * 4 / total_calories) * 100:.1f}%")
+                    print(f"Fat: {(total_fat * 9 / total_calories) * 100:.1f}%")
+                
+                # Display match quality information
+                if recommendations and 'match_quality' in recommendations[0]:
+                    print("\n=== Match Quality ===")
+                    match_quality = recommendations[0]['match_quality']
+                    print(f"Goal: {match_quality['goal']}")
+                    print(f"Calories: {match_quality['calories']}")
+                    print(f"Protein: {match_quality['protein']}")
+                    print(f"Carbs: {match_quality['carbs']}")
+                    print(f"Fat: {match_quality['fat']}")
+                    print("\nTarget Ranges:")
+                    print(f"Protein: {match_quality['target_ranges']['protein']}")
+                    print(f"Carbs: {match_quality['target_ranges']['carbs']}")
+                    print(f"Fat: {match_quality['target_ranges']['fat']}")
+                    print(f"Overall Match: {match_quality['overall_match']}")
+            else:
+                print(f"\nNo meal combinations found for Day {day}. Please try adjusting your targets or dietary restrictions.")
 
     except FileNotFoundError:
         print("Error: Could not find the meal data file (test2.json)")
