@@ -159,7 +159,7 @@ class MealRecommender:
         
         # Filter meals based on preferences
         filtered_meals = []
-        print(f"\nTotal meals available: {len(self.meals)}")
+        # print(f"\nTotal meals available: {len(self.meals)}")
         
         for meal in self.meals:
             # Skip meals with no nutrition data
@@ -194,7 +194,7 @@ class MealRecommender:
                 
             filtered_meals.append(portioned_meal)
         
-        print(f"Meals after basic filtering: {len(filtered_meals)}")
+        # print(f"Meals after basic filtering: {len(filtered_meals)}")
         
         if not filtered_meals:
             print("No meals passed basic filtering. Using all meals...")
@@ -247,7 +247,7 @@ class MealRecommender:
             
             scored_meals.append((overall_score, meal))
         
-        print(f"Meals after scoring: {len(scored_meals)}")
+        # print(f"Meals after scoring: {len(scored_meals)}")
         
         # Sort by score
         scored_meals.sort(reverse=True, key=lambda x: x[0])
@@ -257,7 +257,7 @@ class MealRecommender:
         all_recommendations = []
         
         for meal_time in meal_times:
-            print(f"\nFinding {meal_time} recommendations...")
+            # print(f"\nFinding {meal_time} recommendations...")
             
             # Filter meals for this meal time
             time_filtered_meals = [(score, meal) for score, meal in scored_meals 
@@ -270,12 +270,12 @@ class MealRecommender:
             # Try different combinations of meals
             for num_meals in range(2, 4):  # Try 2 or 3 meals
                 top_meals = time_filtered_meals[:100]  # Consider top 100 meals for combinations
-                print(f"\nTrying combinations of {num_meals} meals from top {len(top_meals)} meals...")
-                print(f"Target calories per meal: {target_calories_per_meal:.0f}")
-                print(f"Target macro ranges:")
-                print(f"Protein: {macro_ranges['protein']['min']*100:.0f}-{macro_ranges['protein']['max']*100:.0f}%")
-                print(f"Carbs: {macro_ranges['carbs']['min']*100:.0f}-{macro_ranges['carbs']['max']*100:.0f}%")
-                print(f"Fat: {macro_ranges['fat']['min']*100:.0f}-{macro_ranges['fat']['max']*100:.0f}%")
+                # print(f"\nTrying combinations of {num_meals} meals from top {len(top_meals)} meals...")
+                # print(f"Target calories per meal: {target_calories_per_meal:.0f}")
+                # print(f"Target macro ranges:")
+                # print(f"Protein: {macro_ranges['protein']['min']*100:.0f}-{macro_ranges['protein']['max']*100:.0f}%")
+                # print(f"Carbs: {macro_ranges['carbs']['min']*100:.0f}-{macro_ranges['carbs']['max']*100:.0f}%")
+                # print(f"Fat: {macro_ranges['fat']['min']*100:.0f}-{macro_ranges['fat']['max']*100:.0f}%")
                 
                 combinations_tried = 0
                 valid_combinations = 0
@@ -368,14 +368,14 @@ class MealRecommender:
                             valid_combinations += 1
                             
                             # Print debug info for the best combination so far
-                            print(f"\nFound better combination (score: {combination_score:.2f}):")
-                            print(f"Restaurant: {restaurant}")
-                            print(f"Total Calories: {total_calories:.0f}")
-                            print(f"Protein: {protein_percent*100:.1f}%")
-                            print(f"Carbs: {carbs_percent*100:.1f}%")
-                            print(f"Fat: {fat_percent*100:.1f}%")
+                            # print(f"\nFound better combination (score: {combination_score:.2f}):")
+                            # print(f"Restaurant: {restaurant}")
+                            # print(f"Total Calories: {total_calories:.0f}")
+                            # print(f"Protein: {protein_percent*100:.1f}%")
+                            # print(f"Carbs: {carbs_percent*100:.1f}%")
+                            # print(f"Fat: {fat_percent*100:.1f}%")
                 
-                print(f"\nTried {combinations_tried} combinations, found {valid_combinations} valid ones")
+                # print(f"\nTried {combinations_tried} combinations, found {valid_combinations} valid ones")
             
             # If we found any valid combinations, create a combined meal
             if best_combination:
