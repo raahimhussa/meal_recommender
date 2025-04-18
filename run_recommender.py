@@ -224,6 +224,13 @@ def main():
             total_carbs = 0
             total_fat = 0
             
+            # Map meal types to display names
+            meal_type_names = {
+                'breakfast': 'Breakfast',
+                'lunch': 'Lunch',
+                'dinner': 'Dinner'
+            }
+            
             for i, meal in enumerate(recommendations, 1):
                 # Safely get meal details with defaults
                 meal_name = meal.get('mealName', 'Unnamed Meal')
@@ -232,8 +239,10 @@ def main():
                 protein = meal.get('protein', 0)
                 carbs = meal.get('carbohydrate', 0)
                 fat = meal.get('fat', 0)
+                meal_type = meal.get('mealType', 'unknown').lower()
+                display_name = meal_type_names.get(meal_type, f'Meal {i}')
                 
-                print(f"\nMeal {i}: {meal_name} from {restaurant}")
+                print(f"\n{display_name}: {meal_name} from {restaurant}")
                 print(f"Calories: {calories}")
                 print(f"Protein: {protein}g")
                 print(f"Carbs: {carbs}g")
