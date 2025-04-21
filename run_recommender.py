@@ -2,6 +2,7 @@
 from meal_recommender import MealRecommender
 import json
 from datetime import datetime
+import random
 
 # Define meal options by category
 MEAL_OPTIONS = {
@@ -193,6 +194,93 @@ def get_weight_goal():
         except ValueError:
             print("Please enter a valid number.")
 
+def get_meal_plan_option():
+    """Get user's preferred meal plan option"""
+    print("\nChoose your meal plan option:")
+    print("1. 19 meals (2 days with 2 meals, 5 days with 3 meals)")
+    print("2. 14 meals (2 meals per day)")
+    print("3. 7 meals (1 meal per day)")
+    
+    while True:
+        try:
+            choice = int(input("Enter your choice (1-3): "))
+            if choice in [1, 2, 3]:
+                return choice
+            print("Please enter a number between 1 and 3.")
+        except ValueError:
+            print("Please enter a valid number.")
+
+def get_meals_to_remove(option):
+    """Get which meals to remove based on the selected option"""
+    if option == 1:
+        print("\nWhich meal would you like to remove from 2 random days?")
+        print("1. Breakfast")
+        print("2. Lunch")
+        print("3. Dinner")
+        
+        while True:
+            try:
+                choice = int(input("Enter your choice (1-3): "))
+                if choice in [1, 2, 3]:
+                    return ['breakfast', 'lunch', 'dinner'][choice-1]
+                print("Please enter a number between 1 and 3.")
+            except ValueError:
+                print("Please enter a valid number.")
+    
+    elif option == 2:
+        print("\nWhich meal would you like to remove from all days?")
+        print("1. Breakfast")
+        print("2. Lunch")
+        print("3. Dinner")
+        
+        while True:
+            try:
+                choice = int(input("Enter your choice (1-3): "))
+                if choice in [1, 2, 3]:
+                    return ['breakfast', 'lunch', 'dinner'][choice-1]
+                print("Please enter a number between 1 and 3.")
+            except ValueError:
+                print("Please enter a valid number.")
+    
+    else:  # option 3
+        print("\nWhich two meals would you like to remove from all days?")
+        print("1. Breakfast")
+        print("2. Lunch")
+        print("3. Dinner")
+        
+        while True:
+            try:
+                choices = input("Enter two numbers separated by space (e.g., '1 2'): ").split()
+                if len(choices) == 2 and all(c in ['1', '2', '3'] for c in choices):
+                    return [['breakfast', 'lunch', 'dinner'][int(c)-1] for c in choices]
+                print("Please enter two valid numbers between 1 and 3.")
+            except ValueError:
+                print("Please enter valid numbers.")
+
+def modify_meal_plan(meal_plan, option, meals_to_remove):
+    """Modify the meal plan based on the selected option"""
+    if option == 1:
+        # Remove specified meal from 2 random days
+        days_to_modify = random.sample(range(len(meal_plan)), 2)
+        for day_idx in days_to_modify:
+            if meals_to_remove in meal_plan[day_idx]['meals_by_type']:
+                del meal_plan[day_idx]['meals_by_type'][meals_to_remove]
+    
+    elif option == 2:
+        # Remove specified meal from all days
+        for day in meal_plan:
+            if meals_to_remove in day['meals_by_type']:
+                del day['meals_by_type'][meals_to_remove]
+    
+    else:  # option 3
+        # Remove two specified meals from all days
+        for day in meal_plan:
+            for meal_type in meals_to_remove:
+                if meal_type in day['meals_by_type']:
+                    del day['meals_by_type'][meal_type]
+    
+    return meal_plan
+
 def main():
     try:
         # Load the recommender system
@@ -213,81 +301,23 @@ def main():
 
         user_id = "student_123"
 
-        # Generate 7-day meal plan
-        print("\nGenerating your 7-day meal plan...")
+        # Get meal plan option
+        option = get_meal_plan_option()
         
-        for day in range(1, 8):
-            print(f"\n=== Day {day} ===")
-            print("Finding the best meal combination for your nutrition requirements...")
-            
-            # Get recommendations for the day
-            recommendations = recommender.get_recommendations(user_id, user_prefs, num_recommendations=3)
-            
-            if recommendations:
-                total_calories = 0
-                total_protein = 0
-                total_carbs = 0
-                total_fat = 0
-                
-                # Map meal types to display names
-                meal_type_names = {
-                    'breakfast': 'Breakfast',
-                    'lunch': 'Lunch',
-                    'dinner': 'Dinner'
-                }
-                
-                for i, meal in enumerate(recommendations, 1):
-                    # Safely get meal details with defaults
-                    meal_name = meal.get('mealName', 'Unnamed Meal')
-                    restaurant = meal.get('restaurantName', 'Unknown Restaurant')
-                    calories = meal.get('calories', 0)
-                    protein = meal.get('protein', 0)
-                    carbs = meal.get('carbohydrate', 0)
-                    fat = meal.get('fat', 0)
-                    meal_type = meal.get('mealType', 'unknown').lower()
-                    display_name = meal_type_names.get(meal_type, f'Meal {i}')
-                    
-                    print(f"\n{display_name}: {meal_name} from {restaurant}")
-                    print(f"Calories: {calories}")
-                    print(f"Protein: {protein}g")
-                    print(f"Carbs: {carbs}g")
-                    print(f"Fat: {fat}g")
-                    
-                    # Sum up totals
-                    total_calories += calories
-                    total_protein += protein
-                    total_carbs += carbs
-                    total_fat += fat
-                
-                print("\n=== Daily Totals ===")
-                print(f"Total Calories: {total_calories}")
-                print(f"Total Protein: {total_protein}g")
-                print(f"Total Carbs: {total_carbs}g")
-                print(f"Total Fat: {total_fat}g")
-                
-                # Calculate macro percentages
-                if total_calories > 0:
-                    print("\n=== Macro Distribution ===")
-                    print(f"Protein: {(total_protein * 4 / total_calories) * 100:.1f}%")
-                    print(f"Carbs: {(total_carbs * 4 / total_calories) * 100:.1f}%")
-                    print(f"Fat: {(total_fat * 9 / total_calories) * 100:.1f}%")
-                
-                # Display match quality information
-                if recommendations and 'match_quality' in recommendations[0]:
-                    print("\n=== Match Quality ===")
-                    match_quality = recommendations[0]['match_quality']
-                    print(f"Goal: {match_quality['goal']}")
-                    print(f"Calories: {match_quality['calories']}")
-                    print(f"Protein: {match_quality['protein']}")
-                    print(f"Carbs: {match_quality['carbs']}")
-                    print(f"Fat: {match_quality['fat']}")
-                    print("\nTarget Ranges:")
-                    print(f"Protein: {match_quality['target_ranges']['protein']}")
-                    print(f"Carbs: {match_quality['target_ranges']['carbs']}")
-                    print(f"Fat: {match_quality['target_ranges']['fat']}")
-                    print(f"Overall Match: {match_quality['overall_match']}")
-            else:
-                print(f"\nNo meal combinations found for Day {day}. Please try adjusting your targets or dietary restrictions.")
+        # Get meals to remove based on option
+        meals_to_remove = get_meals_to_remove(option)
+        
+        # Generate 7-day meal plan
+        print("\nGenerating your meal plan...")
+        
+        # Get the meal plan using the new method
+        meal_plan = recommender.recommend_meal_plan(user_id, user_prefs, days=7)
+        
+        # Modify meal plan based on user's choice
+        modified_meal_plan = modify_meal_plan(meal_plan, option, meals_to_remove)
+        
+        # Display the modified meal plan
+        recommender.display_meal_plan(modified_meal_plan)
 
     except FileNotFoundError:
         print("Error: Could not find the meal data file (test2.json)")

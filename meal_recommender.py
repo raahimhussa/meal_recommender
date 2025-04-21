@@ -130,7 +130,7 @@ class MealRecommender:
         # Get user's goal and calculate target ranges
         goal = preferences.get('goal', 'maintain').lower()
         
-        # Define nutrition ranges based on goal
+        # Define nutrition ranges based on goal with exact specifications
         if goal == 'maintain':
             target_calories = preferences.get('target_calories', 2250)  # Middle of 2000-2500 range
             macro_ranges = {
@@ -164,6 +164,13 @@ class MealRecommender:
         # Calculate target calories per meal (divide by 3 for breakfast, lunch, dinner)
         target_calories_per_meal = target_calories / 3
         
+        # Calculate target macros in grams per meal
+        target_macros_per_meal = {
+            'protein': (target_calories_per_meal * macro_ranges['protein']['min']) / 4,  # 4 calories per gram
+            'carbs': (target_calories_per_meal * macro_ranges['carbs']['min']) / 4,      # 4 calories per gram
+            'fat': (target_calories_per_meal * macro_ranges['fat']['min']) / 9           # 9 calories per gram
+        }
+        
         # Filter meals based on preferences
         filtered_meals = []
         
@@ -195,7 +202,7 @@ class MealRecommender:
             portioned_meal['serving_size'] = f"{portion_multiplier:.2f} of {serving}"
             
             # Skip meals that are still too large for a single meal
-            if portioned_meal['calories'] > target_calories_per_meal * 0.9:  # Allow meals up to 90% of target
+            if portioned_meal['calories'] > target_calories_per_meal * 1.3:  # Allow up to 130% of target
                 continue
                 
             filtered_meals.append(portioned_meal)
@@ -220,36 +227,41 @@ class MealRecommender:
             carbs_percent = (meal_carbs * 4 / meal_calories)
             fat_percent = (meal_fat * 9 / meal_calories)
             
-            # Score based on macro percentages (more lenient)
+            # Score based on how well macros fit target ranges (more precise)
             macro_score = 0
-            if (macro_ranges['protein']['min'] * 0.8 <= protein_percent <= macro_ranges['protein']['max'] * 1.2 and
-                macro_ranges['carbs']['min'] * 0.8 <= carbs_percent <= macro_ranges['carbs']['max'] * 1.2 and
-                macro_ranges['fat']['min'] * 0.8 <= fat_percent <= macro_ranges['fat']['max'] * 1.2):
-                macro_score = 1.0
+            # Protein score (higher is better)
+            if protein_percent < macro_ranges['protein']['min']:
+                protein_score = protein_percent / macro_ranges['protein']['min']
+            elif protein_percent > macro_ranges['protein']['max']:
+                protein_score = 1 - (protein_percent - macro_ranges['protein']['max']) / (1 - macro_ranges['protein']['max'])
             else:
-                # Calculate how far from target ranges (more lenient)
-                protein_diff = min(
-                    abs(protein_percent - macro_ranges['protein']['min'] * 0.8),
-                    abs(protein_percent - macro_ranges['protein']['max'] * 1.2)
-                )
-                carbs_diff = min(
-                    abs(carbs_percent - macro_ranges['carbs']['min'] * 0.8),
-                    abs(carbs_percent - macro_ranges['carbs']['max'] * 1.2)
-                )
-                fat_diff = min(
-                    abs(fat_percent - macro_ranges['fat']['min'] * 0.8),
-                    abs(fat_percent - macro_ranges['fat']['max'] * 1.2)
-                )
-                macro_score = 1 - (protein_diff + carbs_diff + fat_diff) / 3
+                protein_score = 1.0
             
-            # Score based on calorie match (more lenient)
-            ideal_portion = target_calories_per_meal * 0.3  # Target 30% of meal calories
-            calorie_score = 1 - min(abs(meal_calories - ideal_portion) / (ideal_portion * 2), 1)  # Even more lenient
+            # Carbs score
+            if carbs_percent < macro_ranges['carbs']['min']:
+                carbs_score = carbs_percent / macro_ranges['carbs']['min']
+            elif carbs_percent > macro_ranges['carbs']['max']:
+                carbs_score = 1 - (carbs_percent - macro_ranges['carbs']['max']) / (1 - macro_ranges['carbs']['max'])
+            else:
+                carbs_score = 1.0
             
-            # Add random factor for variety
-            random_factor = random.uniform(0.8, 1.2)
+            # Fat score
+            if fat_percent < macro_ranges['fat']['min']:
+                fat_score = fat_percent / macro_ranges['fat']['min']
+            elif fat_percent > macro_ranges['fat']['max']:
+                fat_score = 1 - (fat_percent - macro_ranges['fat']['max']) / (1 - macro_ranges['fat']['max'])
+            else:
+                fat_score = 1.0
             
-            # Calculate overall score with random factor
+            macro_score = (protein_score + carbs_score + fat_score) / 3
+            
+            # Score based on calorie match (more precise)
+            calorie_score = 1 - min(abs(meal_calories - target_calories_per_meal) / target_calories_per_meal, 1)
+            
+            # Add random factor for variety (smaller range for more consistency)
+            random_factor = random.uniform(0.9, 1.1)
+            
+            # Calculate overall score with weights (60% macros, 40% calories)
             overall_score = (macro_score * 0.6 + calorie_score * 0.4) * random_factor
             
             scored_meals.append((overall_score, meal))
@@ -272,12 +284,10 @@ class MealRecommender:
             
             # Try different combinations of meals
             for num_meals in range(2, 4):  # Try 2 or 3 meals
-                # Randomly select from top 100 meals for variety
-                top_meals = time_filtered_meals[:100]
+                # Select from top 50 meals for better quality
+                top_meals = time_filtered_meals[:50]
                 random.shuffle(top_meals)
                 
-                combinations_tried = 0
-                valid_combinations = 0
                 best_combination = None
                 best_total_score = float('-inf')
                 best_total_match = float('-inf')
@@ -296,7 +306,6 @@ class MealRecommender:
                         continue
                         
                     for meal_combination in combinations(meals, num_meals):
-                        combinations_tried += 1
                         total_calories = 0
                         total_macros = {
                             'protein': 0,
@@ -314,12 +323,12 @@ class MealRecommender:
                         if total_calories == 0:
                             continue
                         
-                        # Skip combinations that exceed calorie limit (more lenient)
-                        if total_calories > target_calories_per_meal * 1.5:  # Allow 50% flexibility
+                        # Skip combinations that exceed calorie limit
+                        if total_calories > target_calories_per_meal * 1.3:  # Allow 30% flexibility
                             continue
                         
-                        # Skip combinations that are too low in calories (more lenient)
-                        if total_calories < target_calories_per_meal * 0.5:  # Require at least 50% of target
+                        # Skip combinations that are too low in calories
+                        if total_calories < target_calories_per_meal * 0.7:  # Require at least 70% of target
                             continue
                         
                         # Calculate macro percentages for the combination
@@ -327,30 +336,45 @@ class MealRecommender:
                         carbs_percent = (total_macros['carbs'] * 4 / total_calories)
                         fat_percent = (total_macros['fat'] * 9 / total_calories)
                         
-                        # Score based on macro percentages (more lenient)
-                        macro_score = 0
-                        if (macro_ranges['protein']['min'] * 0.7 <= protein_percent <= macro_ranges['protein']['max'] * 1.3 and
-                            macro_ranges['carbs']['min'] * 0.7 <= carbs_percent <= macro_ranges['carbs']['max'] * 1.3 and
-                            macro_ranges['fat']['min'] * 0.7 <= fat_percent <= macro_ranges['fat']['max'] * 1.3):
-                            macro_score = 1.0
-                        else:
-                            # Calculate how far from target ranges (more lenient)
-                            protein_diff = min(
-                                abs(protein_percent - macro_ranges['protein']['min'] * 0.7),
-                                abs(protein_percent - macro_ranges['protein']['max'] * 1.3)
-                            )
-                            carbs_diff = min(
-                                abs(carbs_percent - macro_ranges['carbs']['min'] * 0.7),
-                                abs(carbs_percent - macro_ranges['carbs']['max'] * 1.3)
-                            )
-                            fat_diff = min(
-                                abs(fat_percent - macro_ranges['fat']['min'] * 0.7),
-                                abs(fat_percent - macro_ranges['fat']['max'] * 1.3)
-                            )
-                            macro_score = 1 - (protein_diff + carbs_diff + fat_diff) / 3
+                        # Skip combinations that don't meet macro requirements
+                        if (protein_percent < macro_ranges['protein']['min'] or 
+                            protein_percent > macro_ranges['protein']['max'] or
+                            carbs_percent < macro_ranges['carbs']['min'] or 
+                            carbs_percent > macro_ranges['carbs']['max'] or
+                            fat_percent < macro_ranges['fat']['min'] or 
+                            fat_percent > macro_ranges['fat']['max']):
+                            continue
                         
-                        # Score based on calorie match (more lenient)
-                        calorie_score = 1 - min(abs(total_calories - target_calories_per_meal) / (target_calories_per_meal * 2.5), 1)
+                        # Score based on macro percentages (more precise)
+                        macro_score = 0
+                        # Protein score
+                        if protein_percent < macro_ranges['protein']['min']:
+                            protein_score = protein_percent / macro_ranges['protein']['min']
+                        elif protein_percent > macro_ranges['protein']['max']:
+                            protein_score = 1 - (protein_percent - macro_ranges['protein']['max']) / (1 - macro_ranges['protein']['max'])
+                        else:
+                            protein_score = 1.0
+                        
+                        # Carbs score
+                        if carbs_percent < macro_ranges['carbs']['min']:
+                            carbs_score = carbs_percent / macro_ranges['carbs']['min']
+                        elif carbs_percent > macro_ranges['carbs']['max']:
+                            carbs_score = 1 - (carbs_percent - macro_ranges['carbs']['max']) / (1 - macro_ranges['carbs']['max'])
+                        else:
+                            carbs_score = 1.0
+                        
+                        # Fat score
+                        if fat_percent < macro_ranges['fat']['min']:
+                            fat_score = fat_percent / macro_ranges['fat']['min']
+                        elif fat_percent > macro_ranges['fat']['max']:
+                            fat_score = 1 - (fat_percent - macro_ranges['fat']['max']) / (1 - macro_ranges['fat']['max'])
+                        else:
+                            fat_score = 1.0
+                        
+                        macro_score = (protein_score + carbs_score + fat_score) / 3
+                        
+                        # Score based on calorie match
+                        calorie_score = 1 - min(abs(total_calories - target_calories_per_meal) / target_calories_per_meal, 1)
                         
                         # Calculate total match score (70% macro match, 30% calorie match)
                         total_match_score = (macro_score * 0.7 + calorie_score * 0.3)
@@ -364,50 +388,49 @@ class MealRecommender:
                             best_total_score = combination_score
                             best_total_match = total_match_score
                             best_combination = meal_combination
-                            valid_combinations += 1
-            
-            # If we found any valid combinations, create a combined meal
-            if best_combination:
-                # Create a combined meal from the best combination
-                combined_meal = {
-                    'mealName': ' + '.join(meal['mealName'] for _, meal in best_combination),
-                    'restaurantName': best_combination[0][1].get('restaurantName', 'Unknown Restaurant'),
-                    'calories': sum(meal.get('calories', 0) for _, meal in best_combination),
-                    'protein': sum(meal.get('protein', 0) for _, meal in best_combination),
-                    'carbohydrate': sum(meal.get('carbohydrate', 0) for _, meal in best_combination),
-                    'fat': sum(meal.get('fat', 0) for _, meal in best_combination),
-                    'ingredients': list(set(ing for _, meal in best_combination for ing in meal.get('ingredients', []))),
-                    'allergens': list(set(allergen for _, meal in best_combination for allergen in meal.get('allergens', []))),
-                    'sub_meals': [meal for _, meal in best_combination],
-                    'mealType': meal_time
-                }
                 
-                # Calculate final macro percentages
-                final_calories = combined_meal['calories']
-                final_protein = combined_meal['protein']
-                final_carbs = combined_meal['carbohydrate']
-                final_fat = combined_meal['fat']
-                
-                final_protein_percent = (final_protein * 4 / final_calories) * 100
-                final_carbs_percent = (final_carbs * 4 / final_calories) * 100
-                final_fat_percent = (final_fat * 9 / final_calories) * 100
-                
-                # Add match quality information
-                combined_meal['match_quality'] = {
-                    'calories': f"{final_calories}/{target_calories_per_meal:.0f} ({((final_calories/target_calories_per_meal)*100):.1f}%)",
-                    'protein': f"{final_protein}g ({final_protein_percent:.1f}%)",
-                    'carbs': f"{final_carbs}g ({final_carbs_percent:.1f}%)",
-                    'fat': f"{final_fat}g ({final_fat_percent:.1f}%)",
-                    'goal': goal.capitalize(),
-                    'target_ranges': {
-                        'protein': f"{macro_ranges['protein']['min']*100:.0f}-{macro_ranges['protein']['max']*100:.0f}%",
-                        'carbs': f"{macro_ranges['carbs']['min']*100:.0f}-{macro_ranges['carbs']['max']*100:.0f}%",
-                        'fat': f"{macro_ranges['fat']['min']*100:.0f}-{macro_ranges['fat']['max']*100:.0f}%"
-                    },
-                    'overall_match': f"Score: {best_total_score:.2f}"
-                }
-                
-                all_recommendations.append(combined_meal)
+                # If we found any valid combinations, create a combined meal
+                if best_combination:
+                    # Create a combined meal from the best combination
+                    combined_meal = {
+                        'mealName': ' + '.join(meal['mealName'] for _, meal in best_combination),
+                        'restaurantName': best_combination[0][1].get('restaurantName', 'Unknown Restaurant'),
+                        'calories': sum(meal.get('calories', 0) for _, meal in best_combination),
+                        'protein': sum(meal.get('protein', 0) for _, meal in best_combination),
+                        'carbohydrate': sum(meal.get('carbohydrate', 0) for _, meal in best_combination),
+                        'fat': sum(meal.get('fat', 0) for _, meal in best_combination),
+                        'ingredients': list(set(ing for _, meal in best_combination for ing in meal.get('ingredients', []))),
+                        'allergens': list(set(allergen for _, meal in best_combination for allergen in meal.get('allergens', []))),
+                        'sub_meals': [meal for _, meal in best_combination],
+                        'mealType': meal_time
+                    }
+                    
+                    # Calculate final macro percentages
+                    final_calories = combined_meal['calories']
+                    final_protein = combined_meal['protein']
+                    final_carbs = combined_meal['carbohydrate']
+                    final_fat = combined_meal['fat']
+                    
+                    final_protein_percent = (final_protein * 4 / final_calories) * 100
+                    final_carbs_percent = (final_carbs * 4 / final_calories) * 100
+                    final_fat_percent = (final_fat * 9 / final_calories) * 100
+                    
+                    # Add match quality information
+                    combined_meal['match_quality'] = {
+                        'calories': f"{final_calories}/{target_calories_per_meal:.0f} ({((final_calories/target_calories_per_meal)*100):.1f}%)",
+                        'protein': f"{final_protein}g ({final_protein_percent:.1f}%)",
+                        'carbs': f"{final_carbs}g ({final_carbs_percent:.1f}%)",
+                        'fat': f"{final_fat}g ({final_fat_percent:.1f}%)",
+                        'goal': goal.capitalize(),
+                        'target_ranges': {
+                            'protein': f"{macro_ranges['protein']['min']*100:.0f}-{macro_ranges['protein']['max']*100:.0f}%",
+                            'carbs': f"{macro_ranges['carbs']['min']*100:.0f}-{macro_ranges['carbs']['max']*100:.0f}%",
+                            'fat': f"{macro_ranges['fat']['min']*100:.0f}-{macro_ranges['fat']['max']*100:.0f}%"
+                        },
+                        'overall_match': f"Score: {best_total_score:.2f}"
+                    }
+                    
+                    all_recommendations.append(combined_meal)
         
         return all_recommendations  # Return all three meals
     
@@ -496,7 +519,12 @@ class MealRecommender:
         
         for day in meal_plan:
             day_num = day['day']
-            for meal in day['meals']:
+            # Get all meals for the day from meals_by_type
+            all_meals = []
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                all_meals.extend(day['meals_by_type'].get(meal_type, []))
+            
+            for meal in all_meals:
                 # Track daily totals
                 daily_totals[day_num]['calories'] += meal.get('calories', 0)
                 daily_totals[day_num]['protein'] += meal.get('protein', 0)
@@ -543,7 +571,10 @@ class MealRecommender:
                 )
         
         # Check swipe limits
-        total_meals = sum(len(day['meals']) for day in meal_plan)
+        total_meals = sum(len(day['meals_by_type'].get('breakfast', [])) + 
+                         len(day['meals_by_type'].get('lunch', [])) + 
+                         len(day['meals_by_type'].get('dinner', [])) 
+                         for day in meal_plan)
         swipe_limit = preferences.get('swipe_limit', 19)
         if total_meals > swipe_limit:
             validation_results['swipes'] = False
@@ -554,49 +585,253 @@ class MealRecommender:
         return validation_results
     
     def recommend_meal_plan(self, user_id, preferences, days=7):
-        """
-        Recommend a weekly meal plan with guaranteed variety and validation
-        """
+        """Recommend a meal plan with 3 days of franchise meals and 4 days of dining hall meals"""
+        # Define macro ranges based on goal
+        goal = preferences.get('goal', 'maintain').lower()
+        if goal == 'maintain':
+            target_calories = 2250  # Middle of 2000-2500 range
+            macro_ranges = {
+                'protein': {'min': 0.20, 'max': 0.30},  # 20-30%
+                'fat': {'min': 0.20, 'max': 0.35},      # 20-35%
+                'carbs': {'min': 0.40, 'max': 0.50}     # 40-50%
+            }
+        elif goal == 'lose':
+            target_calories = 1750  # Middle of 1500-2000 range
+            macro_ranges = {
+                'protein': {'min': 0.30, 'max': 0.40},  # 30-40%
+                'fat': {'min': 0.20, 'max': 0.35},      # 20-35%
+                'carbs': {'min': 0.45, 'max': 0.55}     # 45-55%
+            }
+        else:  # gain
+            target_calories = 2750  # Middle of 2250-3250 range
+            macro_ranges = {
+                'protein': {'min': 0.25, 'max': 0.35},  # 25-35%
+                'fat': {'min': 0.30, 'max': 0.40},      # 30-40%
+                'carbs': {'min': 0.45, 'max': 0.55}     # 45-55%
+            }
+
+        # Define meal type calorie distribution
+        meal_type_distribution = {
+            'breakfast': 0.30,  # 30% of daily calories
+            'lunch': 0.40,      # 40% of daily calories
+            'dinner': 0.30      # 30% of daily calories
+        }
+
+        # Calculate target macros in grams for each meal type
+        meal_type_targets = {}
+        for meal_type, percentage in meal_type_distribution.items():
+            meal_calories = target_calories * percentage
+            meal_type_targets[meal_type] = {
+                'calories': meal_calories,
+                'protein': (meal_calories * macro_ranges['protein']['min']) / 4,  # 4 calories per gram
+                'carbs': (meal_calories * macro_ranges['carbs']['min']) / 4,      # 4 calories per gram
+                'fat': (meal_calories * macro_ranges['fat']['min']) / 9           # 9 calories per gram
+            }
+
         meal_plan = []
-        used_restaurants = set()
         used_meals = set()
+        used_restaurants = set()  # Track used restaurants for franchise days
         
-        for day in range(days):
-            # Get recommendations excluding used restaurants
-            temp_prefs = preferences.copy()
-            temp_prefs['exclude_restaurants'] = list(used_restaurants)
+        # Create 3 franchise days
+        for day in range(3):
+            day_meals = []
+            meal_type_totals = {
+                'breakfast': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0},
+                'lunch': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0},
+                'dinner': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0}
+            }
             
-            # Get daily meals with retries
-            daily_meals = []
-            remaining_attempts = 10
-            
-            while remaining_attempts > 0 and len(daily_meals) < 3:
-                recommendations = self.get_recommendations(user_id, temp_prefs, 5)
+            # Select franchise meals for each meal type
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                targets = meal_type_targets[meal_type]
+                current_totals = meal_type_totals[meal_type]
                 
-                for meal in recommendations:
-                    if (meal['mealId'] not in used_meals and 
-                        meal['restaurantName'] not in used_restaurants):
-                        daily_meals.append(meal)
-                        used_meals.add(meal['mealId'])
-                        used_restaurants.add(meal['restaurantName'])
-                        break
+                # Get available franchise meals for this meal type
+                available_meals = [m for m in self.meals if m['mealId'] not in used_meals 
+                                 and m['restaurantName'] not in used_restaurants]
                 
-                remaining_attempts -= 1
+                if not available_meals:
+                    # If no new restaurants available, allow previously used ones
+                    available_meals = [m for m in self.meals if m['mealId'] not in used_meals]
+                
+                if available_meals:
+                    # Group meals by restaurant first
+                    restaurant_groups = defaultdict(list)
+                    for meal in available_meals:
+                        restaurant_groups[meal['restaurantName']].append(meal)
+                    
+                    # Try to find a restaurant with enough meals for this meal type
+                    selected_meals = []
+                    selected_restaurant = None
+                    
+                    # Sort restaurants by number of available meals
+                    sorted_restaurants = sorted(restaurant_groups.items(), 
+                                             key=lambda x: len(x[1]), 
+                                             reverse=True)
+                    
+                    for restaurant, meals in sorted_restaurants:
+                        if len(meals) >= 3:  # Need at least 3 meals from this restaurant
+                            # Sort meals by protein content for better macro balance
+                            meals.sort(key=lambda x: x.get('protein', 0), reverse=True)
+                            
+                            for meal in meals:
+                                if len(selected_meals) >= 3:
+                                    break
+                                    
+                                new_calories = current_totals['calories'] + meal.get('calories', 0)
+                                if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
+                                    meal['is_franchise'] = True
+                                    meal['mealType'] = meal_type
+                                    selected_meals.append(meal)
+                                    used_meals.add(meal['mealId'])
+                                    current_totals['calories'] = new_calories
+                                    current_totals['protein'] += meal.get('protein', 0)
+                                    current_totals['carbs'] += meal.get('carbohydrate', 0)
+                                    current_totals['fat'] += meal.get('fat', 0)
+                            
+                            if selected_meals:
+                                selected_restaurant = restaurant
+                                break  # Found enough meals from one restaurant
+                    
+                    if selected_restaurant:
+                        used_restaurants.add(selected_restaurant)
+                    day_meals.extend(selected_meals)
             
-            if daily_meals:
+            if day_meals:
+                # Add category information to each meal
+                for meal in day_meals:
+                    meal['display_category'] = 'Franchise'
+                
+                # Group meals by type
+                meals_by_type = {
+                    'breakfast': [m for m in day_meals if m.get('mealType') == 'breakfast'],
+                    'lunch': [m for m in day_meals if m.get('mealType') == 'lunch'],
+                    'dinner': [m for m in day_meals if m.get('mealType') == 'dinner']
+                }
+                
                 meal_plan.append({
                     'day': day + 1,
-                    'restaurant': daily_meals[0]['restaurantName'],
-                    'meals': daily_meals
+                    'meals_by_type': meals_by_type,
+                    'category': 'Franchise'
                 })
         
-        # Validate the meal plan
-        validation = self.validate_meal_plan(meal_plan, preferences)
-        if not all(validation.values()):
-            print("\nMeal Plan Validation Warnings:")
-            for message in validation['messages']:
-                print(f"- {message}")
+        # Create 4 dining hall days
+        for day in range(4):
+            day_meals = []
+            meal_type_totals = {
+                'breakfast': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0},
+                'lunch': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0},
+                'dinner': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0}
+            }
+            
+            # Select dining hall meals for each meal type
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                targets = meal_type_targets[meal_type]
+                current_totals = meal_type_totals[meal_type]
+                
+                # Get available dining hall meals for this meal type
+                available_meals = [m for m in self.meals if m['mealId'] not in used_meals]
+                
+                if available_meals:
+                    # Group meals by dining hall (restaurant)
+                    restaurant_groups = defaultdict(list)
+                    for meal in available_meals:
+                        restaurant_groups[meal['restaurantName']].append(meal)
+                    
+                    # Try to find a dining hall with enough meals for this meal type
+                    selected_meals = []
+                    for restaurant, meals in restaurant_groups.items():
+                        if len(meals) >= 3:  # Need at least 3 meals from this dining hall
+                            # Sort meals by protein content for better macro balance
+                            meals.sort(key=lambda x: x.get('protein', 0), reverse=True)
+                            
+                            for meal in meals:
+                                if len(selected_meals) >= 3:
+                                    break
+                                    
+                                new_calories = current_totals['calories'] + meal.get('calories', 0)
+                                if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
+                                    meal['is_franchise'] = False
+                                    meal['mealType'] = meal_type
+                                    selected_meals.append(meal)
+                                    used_meals.add(meal['mealId'])
+                                    current_totals['calories'] = new_calories
+                                    current_totals['protein'] += meal.get('protein', 0)
+                                    current_totals['carbs'] += meal.get('carbohydrate', 0)
+                                    current_totals['fat'] += meal.get('fat', 0)
+                            
+                            if selected_meals:
+                                break  # Found enough meals from one dining hall
+                    
+                    day_meals.extend(selected_meals)
+            
+            if day_meals:
+                # Add category information to each meal
+                for meal in day_meals:
+                    meal['display_category'] = 'Dining Hall'
+                
+                # Group meals by type
+                meals_by_type = {
+                    'breakfast': [m for m in day_meals if m.get('mealType') == 'breakfast'],
+                    'lunch': [m for m in day_meals if m.get('mealType') == 'lunch'],
+                    'dinner': [m for m in day_meals if m.get('mealType') == 'dinner']
+                }
+                
+                meal_plan.append({
+                    'day': day + 4,  # Start from day 4 since first 3 days are franchise
+                    'meals_by_type': meals_by_type,
+                    'category': 'Dining Hall'
+                })
         
+        def validate_meal_combination(meals, targets):
+            """Validate if a combination of meals meets macro requirements"""
+            total_calories = sum(meal.get('calories', 0) for meal in meals)
+            total_protein = sum(meal.get('protein', 0) for meal in meals)
+            total_carbs = sum(meal.get('carbohydrate', 0) for meal in meals)
+            total_fat = sum(meal.get('fat', 0) for meal in meals)
+
+            if total_calories == 0:
+                return False
+
+            # Calculate macro percentages
+            protein_percent = (total_protein * 4 / total_calories)
+            carbs_percent = (total_carbs * 4 / total_calories)
+            fat_percent = (total_fat * 9 / total_calories)
+
+            # Check if within target ranges
+            return (
+                abs(total_calories - targets['calories']) <= targets['calories'] * 0.1 and  # Within 10% of target
+                macro_ranges['protein']['min'] <= protein_percent <= macro_ranges['protein']['max'] and
+                macro_ranges['carbs']['min'] <= carbs_percent <= macro_ranges['carbs']['max'] and
+                macro_ranges['fat']['min'] <= fat_percent <= macro_ranges['fat']['max']
+            )
+
+        # Modify meal selection to consider macro requirements
+        for day in meal_plan:
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                if meal_type in day['meals_by_type']:
+                    meals = day['meals_by_type'][meal_type]
+                    targets = meal_type_targets[meal_type]
+                    
+                    # Try different combinations until we find one that meets requirements
+                    from itertools import combinations
+                    best_combination = None
+                    best_score = float('-inf')
+                    
+                    for combo_size in range(1, min(4, len(meals) + 1)):
+                        for combo in combinations(meals, combo_size):
+                            if validate_meal_combination(combo, targets):
+                                # Score based on how well it matches targets
+                                total_calories = sum(meal.get('calories', 0) for meal in combo)
+                                score = 1 - abs(total_calories - targets['calories']) / targets['calories']
+                                
+                                if score > best_score:
+                                    best_score = score
+                                    best_combination = combo
+                    
+                    if best_combination:
+                        day['meals_by_type'][meal_type] = list(best_combination)
+
         return meal_plan
     
     def get_similar_meals(self, meal_id, num_similar=5):
@@ -607,3 +842,64 @@ class MealRecommender:
             return [self.meals[i] for i in similar_indices]
         except StopIteration:
             return []
+
+    def display_meal_plan(self, meal_plan):
+        """Display the meal plan with macro information"""
+        for day in meal_plan:
+            day_num = day['day']
+            category = day['category']
+            print(f"\nDay {day_num} ({category})")
+            print("-" * 30)
+            
+            daily_totals = {
+                'calories': 0,
+                'protein': 0,
+                'carbs': 0,
+                'fat': 0
+            }
+            
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                if meal_type in day['meals_by_type'] and day['meals_by_type'][meal_type]:
+                    meals = day['meals_by_type'][meal_type]
+                    print(f"\n{meal_type.title()}:")
+                    
+                    meal_totals = {
+                        'calories': 0,
+                        'protein': 0,
+                        'carbs': 0,
+                        'fat': 0
+                    }
+                    
+                    for meal in meals:
+                        print(f"  - {meal['mealName']} ({meal['restaurantName']})")
+                        print(f"    Calories: {meal.get('calories', 0)}")
+                        print(f"    Protein: {meal.get('protein', 0)}g")
+                        print(f"    Carbs: {meal.get('carbohydrate', 0)}g")
+                        print(f"    Fat: {meal.get('fat', 0)}g")
+                        
+                        meal_totals['calories'] += meal.get('calories', 0)
+                        meal_totals['protein'] += meal.get('protein', 0)
+                        meal_totals['carbs'] += meal.get('carbohydrate', 0)
+                        meal_totals['fat'] += meal.get('fat', 0)
+                    
+                    # Add to daily totals
+                    daily_totals['calories'] += meal_totals['calories']
+                    daily_totals['protein'] += meal_totals['protein']
+                    daily_totals['carbs'] += meal_totals['carbs']
+                    daily_totals['fat'] += meal_totals['fat']
+                    
+                    # Display meal type totals and percentages
+                    if meal_totals['calories'] > 0:
+                        print(f"\n  {meal_type.title()} Totals:")
+                        print(f"  Calories: {meal_totals['calories']}")
+                        print(f"  Protein: {meal_totals['protein']}g ({(meal_totals['protein'] * 4 / meal_totals['calories']) * 100:.1f}%)")
+                        print(f"  Carbs: {meal_totals['carbs']}g ({(meal_totals['carbs'] * 4 / meal_totals['calories']) * 100:.1f}%)")
+                        print(f"  Fat: {meal_totals['fat']}g ({(meal_totals['fat'] * 9 / meal_totals['calories']) * 100:.1f}%)")
+            
+            # Display daily totals and percentages
+            if daily_totals['calories'] > 0:
+                print("\nDaily Totals:")
+                print(f"Calories: {daily_totals['calories']}")
+                print(f"Protein: {daily_totals['protein']}g ({(daily_totals['protein'] * 4 / daily_totals['calories']) * 100:.1f}%)")
+                print(f"Carbs: {daily_totals['carbs']}g ({(daily_totals['carbs'] * 4 / daily_totals['calories']) * 100:.1f}%)")
+                print(f"Fat: {daily_totals['fat']}g ({(daily_totals['fat'] * 9 / daily_totals['calories']) * 100:.1f}%)")
