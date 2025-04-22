@@ -260,8 +260,8 @@ def get_meals_to_remove(option):
 def modify_meal_plan(meal_plan, option, meals_to_remove):
     """Modify the meal plan based on the selected option"""
     if option == 1:
-        # Remove specified meal from 2 random days
-        days_to_modify = random.sample(range(len(meal_plan)), 2)
+        # Remove specified meal from 2 out of first 3 days (franchise days)
+        days_to_modify = random.sample(range(3), 2)  # Select 2 days from first 3
         for day_idx in days_to_modify:
             if meals_to_remove in meal_plan[day_idx]['meals_by_type']:
                 del meal_plan[day_idx]['meals_by_type'][meals_to_remove]
