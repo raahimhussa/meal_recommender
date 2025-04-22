@@ -14,6 +14,13 @@ class MealRecommender:
             with open(json_file, 'r') as f:
                 self.meals = json.load(f)
             
+            # Define meal options by category
+            self.meal_options = {
+                'breakfast': ['starbucks', 'jamba juice', 'village juice', 'taco bell'],
+                'lunch': ['barberitos', 'qdoba', 'saladworks', 'bojangles'],
+                'dinner': ['subway', 'chick-fil-a', 'panera bread', 'panda express']
+            }
+            
             # Ensure all meals have required fields
             for meal in self.meals:
                 meal['mealName'] = meal.get('mealName', 'Unnamed Meal')
@@ -22,7 +29,23 @@ class MealRecommender:
                 meal['protein'] = float(meal.get('protein', 0))
                 meal['carbohydrate'] = float(meal.get('carbohydrate', 0))
                 meal['fat'] = float(meal.get('fat', 0))
-                meal['mealType'] = meal.get('mealType', 'Unknown')
+                
+                # Get original meal type or set to Unknown if not present
+                original_type = meal.get('mealType', 'Unknown')
+                
+                # If meal type is Unknown, try to determine it from restaurant name
+                if original_type.lower() == 'unknown':
+                    restaurant_name = meal.get('restaurantName', '').lower()
+                    for category, restaurants in self.meal_options.items():
+                        if any(restaurant.lower() in restaurant_name for restaurant in restaurants):
+                            meal['mealType'] = category
+                            break
+                    else:
+                        # If no match found, keep it as Unknown
+                        meal['mealType'] = original_type
+                else:
+                    # Keep the original meal type
+                    meal['mealType'] = original_type
                 
         except FileNotFoundError:
             print(f"Error: Could not find the meal data file ({json_file})")
@@ -647,12 +670,16 @@ class MealRecommender:
                 current_totals = meal_type_totals[meal_type]
                 
                 # Get available franchise meals for this meal type
-                available_meals = [m for m in self.meals if m['mealId'] not in used_meals 
-                                 and m['restaurantName'] not in used_restaurants]
+                available_meals = [m for m in self.meals 
+                                 if m['mealId'] not in used_meals 
+                                 and m['restaurantName'] not in used_restaurants
+                                 and m['category'] == 'Franchise']
                 
                 if not available_meals:
                     # If no new restaurants available, allow previously used ones
-                    available_meals = [m for m in self.meals if m['mealId'] not in used_meals]
+                    available_meals = [m for m in self.meals 
+                                     if m['mealId'] not in used_meals 
+                                     and m['category'] == 'Franchise']
                 
                 if available_meals:
                     # Group meals by restaurant first
@@ -730,7 +757,9 @@ class MealRecommender:
                 current_totals = meal_type_totals[meal_type]
                 
                 # Get available dining hall meals for this meal type
-                available_meals = [m for m in self.meals if m['mealId'] not in used_meals]
+                available_meals = [m for m in self.meals 
+                                 if m['mealId'] not in used_meals 
+                                 and m['category'] == 'Dining-Halls']
                 
                 if available_meals:
                     # Group meals by dining hall (restaurant)
