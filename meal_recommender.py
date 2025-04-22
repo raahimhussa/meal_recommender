@@ -705,13 +705,15 @@ class MealRecommender:
                 available_meals = [m for m in self.meals 
                                  if m['mealId'] not in used_meals 
                                  and m['restaurantName'] not in used_restaurants
-                                 and m['category'] == 'Franchise']
+                                 and m['category'] == 'Franchise'
+                                 and m['mealType'].lower() == meal_type.lower()]
                 
                 if not available_meals:
                     # If no new restaurants available, allow previously used ones
                     available_meals = [m for m in self.meals 
                                      if m['mealId'] not in used_meals 
-                                     and m['category'] == 'Franchise']
+                                     and m['category'] == 'Franchise'
+                                     and m['mealType'].lower() == meal_type.lower()]
                 
                 if available_meals:
                     # Group meals by restaurant first
@@ -744,13 +746,15 @@ class MealRecommender:
                                 new_calories = current_totals['calories'] + meal.get('calories', 0)
                                 if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
                                     meal['is_franchise'] = True
-                                    meal['mealType'] = meal_type
+                                    # Preserve the original meal type from JSON
+                                    if meal['mealType'].lower() != meal_type.lower():
+                                        print(f"Warning: Meal {meal['mealName']} has type {meal['mealType']} but is being assigned to {meal_type}")
+                                        continue
                                     selected_meals.append(meal)
-                                    used_meals.add(meal['mealId'])
-                                    current_totals['calories'] = new_calories
+                                    current_totals['calories'] += meal.get('calories', 0)
                                     current_totals['protein'] += meal.get('protein', 0)
-                                    current_totals['carbs'] += meal.get('carbohydrate', 0)
                                     current_totals['fat'] += meal.get('fat', 0)
+                                    current_totals['carbohydrate'] += meal.get('carbohydrate', 0)
                             
                             if selected_meals:
                                 selected_restaurant = restaurant
@@ -767,9 +771,9 @@ class MealRecommender:
                 
                 # Group meals by type
                 meals_by_type = {
-                    'breakfast': [m for m in day_meals if m.get('mealType') == 'breakfast'],
-                    'lunch': [m for m in day_meals if m.get('mealType') == 'lunch'],
-                    'dinner': [m for m in day_meals if m.get('mealType') == 'dinner']
+                    'breakfast': [m for m in day_meals if m.get('mealType', '').lower() == 'breakfast'],
+                    'lunch': [m for m in day_meals if m.get('mealType', '').lower() == 'lunch'],
+                    'dinner': [m for m in day_meals if m.get('mealType', '').lower() == 'dinner']
                 }
                 
                 meal_plan.append({
@@ -795,7 +799,8 @@ class MealRecommender:
                 # Get available dining hall meals for this meal type
                 available_meals = [m for m in self.meals 
                                  if m['mealId'] not in used_meals 
-                                 and m['category'] == 'Dining-Halls']
+                                 and m['category'] == 'Dining-Halls'
+                                 and m['mealType'].lower() == meal_type.lower()]
                 
                 if available_meals:
                     # Group meals by dining hall (restaurant)
@@ -821,7 +826,8 @@ class MealRecommender:
                                 new_calories = current_totals['calories'] + meal.get('calories', 0)
                                 if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
                                     meal['is_franchise'] = False
-                                    meal['mealType'] = meal_type
+                                    # Keep the original meal type from JSON
+                                    meal['mealType'] = meal['mealType'].lower()
                                     selected_meals.append(meal)
                                     used_meals.add(meal['mealId'])
                                     current_totals['calories'] = new_calories
@@ -841,9 +847,9 @@ class MealRecommender:
                 
                 # Group meals by type
                 meals_by_type = {
-                    'breakfast': [m for m in day_meals if m.get('mealType') == 'breakfast'],
-                    'lunch': [m for m in day_meals if m.get('mealType') == 'lunch'],
-                    'dinner': [m for m in day_meals if m.get('mealType') == 'dinner']
+                    'breakfast': [m for m in day_meals if m.get('mealType', '').lower() == 'breakfast'],
+                    'lunch': [m for m in day_meals if m.get('mealType', '').lower() == 'lunch'],
+                    'dinner': [m for m in day_meals if m.get('mealType', '').lower() == 'dinner']
                 }
                 
                 meal_plan.append({
