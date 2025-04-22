@@ -607,6 +607,38 @@ class MealRecommender:
         
         return validation_results
     
+    def is_similar_item(self, item1, item2):
+        """Check if two meal items are similar based on their names and ingredients"""
+        # Convert to lowercase for comparison
+        name1 = item1['mealName'].lower()
+        name2 = item2['mealName'].lower()
+        
+        # Get ingredients lists
+        ingredients1 = set(ing.lower() for ing in item1.get('ingredients', []))
+        ingredients2 = set(ing.lower() for ing in item2.get('ingredients', []))
+        
+        # Check for common words in names
+        name_words1 = set(name1.split())
+        name_words2 = set(name2.split())
+        common_name_words = name_words1.intersection(name_words2)
+        
+        # If more than 2 common words in names, likely similar
+        if len(common_name_words) >= 2:
+            return True
+            
+        # Check for common ingredients
+        common_ingredients = ingredients1.intersection(ingredients2)
+        if len(common_ingredients) >= 3:  # If 3 or more common ingredients
+            return True
+            
+        # Check for specific patterns
+        patterns = ['nugget', 'burger', 'sandwich', 'salad', 'pizza', 'pasta', 'rice', 'chicken', 'beef', 'fish']
+        for pattern in patterns:
+            if pattern in name1 and pattern in name2:
+                return True
+                
+        return False
+
     def recommend_meal_plan(self, user_id, preferences, days=7):
         """Recommend a meal plan with 3 days of franchise meals and 4 days of dining hall meals"""
         # Define macro ranges based on goal
@@ -705,6 +737,10 @@ class MealRecommender:
                                 if len(selected_meals) >= 3:
                                     break
                                     
+                                # Check if this meal is similar to any already selected meal
+                                if any(self.is_similar_item(meal, selected) for selected in selected_meals):
+                                    continue
+                                    
                                 new_calories = current_totals['calories'] + meal.get('calories', 0)
                                 if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
                                     meal['is_franchise'] = True
@@ -777,6 +813,10 @@ class MealRecommender:
                             for meal in meals:
                                 if len(selected_meals) >= 3:
                                     break
+                                    
+                                # Check if this meal is similar to any already selected meal
+                                if any(self.is_similar_item(meal, selected) for selected in selected_meals):
+                                    continue
                                     
                                 new_calories = current_totals['calories'] + meal.get('calories', 0)
                                 if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
