@@ -226,7 +226,7 @@ class MealRecommender:
             portioned_meal['serving_size'] = f"{portion_multiplier:.2f} of {serving}"
             
             # Skip meals that are still too large for a single meal
-            if portioned_meal['calories'] > target_calories_per_meal * 1.05:  # Allow up to 130% of target
+            if portioned_meal['calories'] > target_calories_per_meal * 1.03:  # Allow up to 130% of target
                 continue
                 
             filtered_meals.append(portioned_meal)
@@ -283,7 +283,7 @@ class MealRecommender:
             calorie_score = 1 - min(abs(meal_calories - target_calories_per_meal) / target_calories_per_meal, 1)
             
             # Add random factor for variety (smaller range for more consistency)
-            random_factor = random.uniform(0.9, 1.05)
+            random_factor = random.uniform(0.9, 1.03)
             
             # Calculate overall score with weights (60% macros, 40% calories)
             overall_score = (macro_score * 0.6 + calorie_score * 0.4) * random_factor
@@ -348,11 +348,11 @@ class MealRecommender:
                             continue
                         
                         # Skip combinations that exceed calorie limit
-                        if total_calories > target_calories_per_meal * 1.05:  # Allow 30% flexibility
+                        if total_calories > target_calories_per_meal * 1.03:  # Allow 30% flexibility
                             continue
                         
                         # Skip combinations that are too low in calories
-                        if total_calories < target_calories_per_meal * 0.95:  # Require at least 70% of target
+                        if total_calories < target_calories_per_meal * 0.97:  # Require at least 70% of target
                             continue
                         
                         # Calculate macro percentages for the combination
@@ -566,7 +566,7 @@ class MealRecommender:
         # Check daily calorie limits
         target_daily_calories = preferences.get('target_daily_calories', 2000)
         for day_num, totals in daily_totals.items():
-            if totals['calories'] > target_daily_calories * 1.05:  # 10% buffer
+            if totals['calories'] > target_daily_calories * 1.03:  # 10% buffer
                 validation_results['calories'] = False
                 validation_results['messages'].append(
                     f"Day {day_num}: Total calories ({totals['calories']}) exceed daily limit"
@@ -749,7 +749,7 @@ class MealRecommender:
                                 
                             new_calories = current_totals['calories'] + meal.get('calories', 0)
                             # Allow more flexibility in calorie targets
-                            if new_calories <= targets['calories'] * 1.05:  # Increased from 1.05 to 1.3
+                            if new_calories <= targets['calories'] * 1.03:  # Increased from 1.03 to 1.3
                                 meal['is_franchise'] = True
                                 # Preserve the original meal type from JSON
                                 if meal['mealType'].lower() != meal_type.lower():
@@ -829,7 +829,7 @@ class MealRecommender:
                                 
                             new_calories = current_totals['calories'] + meal.get('calories', 0)
                             # Allow more flexibility in calorie targets
-                            if new_calories <= targets['calories'] * 1.05:  # Increased from 1.05 to 1.3
+                            if new_calories <= targets['calories'] * 1.03:  # Increased from 1.03 to 1.3
                                 meal['is_franchise'] = False
                                 # Keep the original meal type from JSON
                                 meal['mealType'] = meal['mealType'].lower()
