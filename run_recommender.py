@@ -213,19 +213,52 @@ def get_meal_plan_option():
 def get_meals_to_remove(option):
     """Get which meals to remove based on the selected option"""
     if option == 1:
-        print("\nWhich meal would you like to remove from 2 random days?")
+        print("\nStep 1: Ask for Meal Preferences")
+        print("Available meal types:")
         print("1. Breakfast")
         print("2. Lunch")
         print("3. Dinner")
+        print("\nWhich of these meal types do you prefer? Select one or more.")
+        print("Enter numbers separated by spaces (e.g., '1 2' for Breakfast and Lunch)")
         
         while True:
             try:
-                choice = int(input("Enter your choice (1-3): "))
-                if choice in [1, 2, 3]:
-                    return ['breakfast', 'lunch', 'dinner'][choice-1]
-                print("Please enter a number between 1 and 3.")
+                choices = input("Your choices: ").split()
+                if not choices:
+                    print("Please select at least one meal type.")
+                    continue
+                    
+                # Convert choices to meal types
+                selected_meals = []
+                for choice in choices:
+                    if choice == '1':
+                        selected_meals.append('breakfast')
+                    elif choice == '2':
+                        selected_meals.append('lunch')
+                    elif choice == '3':
+                        selected_meals.append('dinner')
+                    else:
+                        print("Please enter valid numbers between 1 and 3.")
+                        break
+                
+                if len(selected_meals) == len(choices):  # All choices were valid
+                    if len(selected_meals) == 3:
+                        # If all three selected, randomly remove one meal from 2 random days
+                        meals_to_remove = random.sample(['breakfast', 'lunch', 'dinner'], 1)
+                        return meals_to_remove[0]
+                    elif len(selected_meals) == 2:
+                        # If two selected, remove the unselected one
+                        all_meals = ['breakfast', 'lunch', 'dinner']
+                        unselected = [meal for meal in all_meals if meal not in selected_meals]
+                        return unselected[0]
+                    else:  # If one selected
+                        # Remove one random meal from unselected types
+                        all_meals = ['breakfast', 'lunch', 'dinner']
+                        unselected = [meal for meal in all_meals if meal not in selected_meals]
+                        return random.choice(unselected)
+            
             except ValueError:
-                print("Please enter a valid number.")
+                print("Please enter valid numbers separated by spaces.")
     
     elif option == 2:
         print("\nWhich meal would you like to remove from all days?")
@@ -260,11 +293,19 @@ def get_meals_to_remove(option):
 def modify_meal_plan(meal_plan, option, meals_to_remove):
     """Modify the meal plan based on the selected option"""
     if option == 1:
-        # Remove specified meal from 2 out of first 3 days (franchise days)
-        days_to_modify = random.sample(range(3), 2)  # Select 2 days from first 3
+        # For option 1, we only modify the first 3 days (franchise days)
+        franchise_days = meal_plan[:3]
+        
+        # Randomly select 2 days from the first 3
+        days_to_modify = random.sample(range(3), 2)
+        
+        # Remove the specified meal type from the selected days
         for day_idx in days_to_modify:
-            if meals_to_remove in meal_plan[day_idx]['meals_by_type']:
-                del meal_plan[day_idx]['meals_by_type'][meals_to_remove]
+            if meals_to_remove in franchise_days[day_idx]['meals_by_type']:
+                del franchise_days[day_idx]['meals_by_type'][meals_to_remove]
+        
+        # Update the meal plan with modified franchise days
+        meal_plan[:3] = franchise_days
     
     elif option == 2:
         # Remove specified meal from all days
