@@ -226,7 +226,7 @@ class MealRecommender:
             portioned_meal['serving_size'] = f"{portion_multiplier:.2f} of {serving}"
             
             # Skip meals that are still too large for a single meal
-            if portioned_meal['calories'] > target_calories_per_meal * 1.3:  # Allow up to 130% of target
+            if portioned_meal['calories'] > target_calories_per_meal * 1.05:  # Allow up to 130% of target
                 continue
                 
             filtered_meals.append(portioned_meal)
@@ -283,7 +283,7 @@ class MealRecommender:
             calorie_score = 1 - min(abs(meal_calories - target_calories_per_meal) / target_calories_per_meal, 1)
             
             # Add random factor for variety (smaller range for more consistency)
-            random_factor = random.uniform(0.9, 1.1)
+            random_factor = random.uniform(0.9, 1.05)
             
             # Calculate overall score with weights (60% macros, 40% calories)
             overall_score = (macro_score * 0.6 + calorie_score * 0.4) * random_factor
@@ -348,11 +348,11 @@ class MealRecommender:
                             continue
                         
                         # Skip combinations that exceed calorie limit
-                        if total_calories > target_calories_per_meal * 1.3:  # Allow 30% flexibility
+                        if total_calories > target_calories_per_meal * 1.05:  # Allow 30% flexibility
                             continue
                         
                         # Skip combinations that are too low in calories
-                        if total_calories < target_calories_per_meal * 0.7:  # Require at least 70% of target
+                        if total_calories < target_calories_per_meal * 0.95:  # Require at least 70% of target
                             continue
                         
                         # Calculate macro percentages for the combination
@@ -566,7 +566,7 @@ class MealRecommender:
         # Check daily calorie limits
         target_daily_calories = preferences.get('target_daily_calories', 2000)
         for day_num, totals in daily_totals.items():
-            if totals['calories'] > target_daily_calories * 1.1:  # 10% buffer
+            if totals['calories'] > target_daily_calories * 1.05:  # 10% buffer
                 validation_results['calories'] = False
                 validation_results['messages'].append(
                     f"Day {day_num}: Total calories ({totals['calories']}) exceed daily limit"
@@ -738,36 +738,34 @@ class MealRecommender:
                                              reverse=True)
                     
                     for restaurant, meals in sorted_restaurants:
-                        if len(meals) >= 3:  # Need at least 3 meals from this restaurant
-                            # Sort meals by protein content for better macro balance
-                            meals.sort(key=lambda x: x.get('protein', 0), reverse=True)
-                            
-                            for meal in meals:
-                                if len(selected_meals) >= 3:
-                                    break
-                                    
-                                # Check if this meal is similar to any already selected meal
-                                if any(self.is_similar_item(meal, selected) for selected in selected_meals):
+                        # Remove the fixed limit of 3 meals per restaurant
+                        # Sort meals by protein content for better macro balance
+                        meals.sort(key=lambda x: x.get('protein', 0), reverse=True)
+                        
+                        for meal in meals:
+                            # Check if this meal is similar to any already selected meal
+                            if any(self.is_similar_item(meal, selected) for selected in selected_meals):
+                                continue
+                                
+                            new_calories = current_totals['calories'] + meal.get('calories', 0)
+                            # Allow more flexibility in calorie targets
+                            if new_calories <= targets['calories'] * 1.05:  # Increased from 1.05 to 1.3
+                                meal['is_franchise'] = True
+                                # Preserve the original meal type from JSON
+                                if meal['mealType'].lower() != meal_type.lower():
+                                    print(f"Warning: Meal {meal['mealName']} has type {meal['mealType']} but is being assigned to {meal_type}")
                                     continue
-                                    
-                                new_calories = current_totals['calories'] + meal.get('calories', 0)
-                                if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
-                                    meal['is_franchise'] = True
-                                    # Preserve the original meal type from JSON
-                                    if meal['mealType'].lower() != meal_type.lower():
-                                        print(f"Warning: Meal {meal['mealName']} has type {meal['mealType']} but is being assigned to {meal_type}")
-                                        continue
-                                    selected_meals.append(meal)
-                                    used_meals.add(meal['mealId'])
-                                    used_meal_names.add(meal['mealName'])
-                                    current_totals['calories'] += meal.get('calories', 0)
-                                    current_totals['protein'] += meal.get('protein', 0)
-                                    current_totals['fat'] += meal.get('fat', 0)
-                                    current_totals['carbs'] += meal.get('carbohydrate', 0)
-                            
-                            if selected_meals:
-                                selected_restaurant = restaurant
-                                break  # Found enough meals from one restaurant
+                                selected_meals.append(meal)
+                                used_meals.add(meal['mealId'])
+                                used_meal_names.add(meal['mealName'])
+                                current_totals['calories'] += meal.get('calories', 0)
+                                current_totals['protein'] += meal.get('protein', 0)
+                                current_totals['fat'] += meal.get('fat', 0)
+                                current_totals['carbs'] += meal.get('carbohydrate', 0)
+                        
+                        if selected_meals:
+                            selected_restaurant = restaurant
+                            break  # Found enough meals from one restaurant
                     
                     if selected_restaurant:
                         used_restaurants.add(selected_restaurant)
@@ -820,32 +818,30 @@ class MealRecommender:
                     # Try to find a dining hall with enough meals for this meal type
                     selected_meals = []
                     for restaurant, meals in restaurant_groups.items():
-                        if len(meals) >= 3:  # Need at least 3 meals from this dining hall
-                            # Sort meals by protein content for better macro balance
-                            meals.sort(key=lambda x: x.get('protein', 0), reverse=True)
-                            
-                            for meal in meals:
-                                if len(selected_meals) >= 3:
-                                    break
-                                    
-                                # Check if this meal is similar to any already selected meal
-                                if any(self.is_similar_item(meal, selected) for selected in selected_meals):
-                                    continue
-                                    
-                                new_calories = current_totals['calories'] + meal.get('calories', 0)
-                                if new_calories <= targets['calories'] * 1.1:  # Allow 10% over target
-                                    meal['is_franchise'] = False
-                                    # Keep the original meal type from JSON
-                                    meal['mealType'] = meal['mealType'].lower()
-                                    selected_meals.append(meal)
-                                    used_meals.add(meal['mealId'])
-                                    current_totals['calories'] = new_calories
-                                    current_totals['protein'] += meal.get('protein', 0)
-                                    current_totals['carbs'] += meal.get('carbohydrate', 0)
-                                    current_totals['fat'] += meal.get('fat', 0)
-                            
-                            if selected_meals:
-                                break  # Found enough meals from one dining hall
+                        # Remove the fixed limit of 3 meals per dining hall
+                        # Sort meals by protein content for better macro balance
+                        meals.sort(key=lambda x: x.get('protein', 0), reverse=True)
+                        
+                        for meal in meals:
+                            # Check if this meal is similar to any already selected meal
+                            if any(self.is_similar_item(meal, selected) for selected in selected_meals):
+                                continue
+                                
+                            new_calories = current_totals['calories'] + meal.get('calories', 0)
+                            # Allow more flexibility in calorie targets
+                            if new_calories <= targets['calories'] * 1.05:  # Increased from 1.05 to 1.3
+                                meal['is_franchise'] = False
+                                # Keep the original meal type from JSON
+                                meal['mealType'] = meal['mealType'].lower()
+                                selected_meals.append(meal)
+                                used_meals.add(meal['mealId'])
+                                current_totals['calories'] = new_calories
+                                current_totals['protein'] += meal.get('protein', 0)
+                                current_totals['carbs'] += meal.get('carbohydrate', 0)
+                                current_totals['fat'] += meal.get('fat', 0)
+                        
+                        if selected_meals:
+                            break  # Found enough meals from one dining hall
                     
                     day_meals.extend(selected_meals)
             
@@ -902,7 +898,8 @@ class MealRecommender:
                     best_combination = None
                     best_score = float('-inf')
                     
-                    for combo_size in range(1, min(4, len(meals) + 1)):
+                    # Allow for larger combinations by increasing the max combo size
+                    for combo_size in range(1, min(6, len(meals) + 1)):  # Increased from 4 to 6
                         for combo in combinations(meals, combo_size):
                             if validate_meal_combination(combo, targets):
                                 # Score based on how well it matches targets
