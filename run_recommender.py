@@ -289,9 +289,13 @@ def main():
         # Get user's weight goal
         goal = get_weight_goal()
         
-        # Define base preferences with goal
+        # Get target calories from user
+        target_calories = get_total_calories()
+        
+        # Define base preferences with goal and target calories
         user_prefs = {
             'goal': goal,
+            'target_calories': target_calories,
             'allergies': [],  # No allergies to start with
             'exercise': 'Regular exercise',
             'preferred_locations': [],  # No location restrictions

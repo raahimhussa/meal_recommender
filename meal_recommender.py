@@ -153,23 +153,25 @@ class MealRecommender:
         # Get user's goal and calculate target ranges
         goal = preferences.get('goal', 'maintain').lower()
         
+        # Get target calories from preferences
+        target_calories = preferences.get('target_calories')
+        if target_calories is None:
+            raise ValueError("Target calories must be provided in preferences")
+        
         # Define nutrition ranges based on goal with exact specifications
         if goal == 'maintain':
-            target_calories = preferences.get('target_calories', 2250)  # Middle of 2000-2500 range
             macro_ranges = {
                 'protein': {'min': 0.20, 'max': 0.30},  # 20-30%
                 'fat': {'min': 0.20, 'max': 0.35},      # 20-35%
                 'carbs': {'min': 0.40, 'max': 0.50}     # 40-50%
             }
         elif goal == 'lose':
-            target_calories = preferences.get('target_calories', 1750)  # Middle of 1500-2000 range
             macro_ranges = {
                 'protein': {'min': 0.30, 'max': 0.40},  # 30-40%
                 'fat': {'min': 0.20, 'max': 0.35},      # 20-35%
                 'carbs': {'min': 0.45, 'max': 0.55}     # 45-55%
             }
         elif goal == 'gain':
-            target_calories = preferences.get('target_calories', 2750)  # Middle of 2250-3250 range
             macro_ranges = {
                 'protein': {'min': 0.25, 'max': 0.35},  # 25-35%
                 'fat': {'min': 0.30, 'max': 0.40},      # 30-40%
@@ -177,7 +179,6 @@ class MealRecommender:
             }
         else:
             # Default to maintain if goal is not specified
-            target_calories = preferences.get('target_calories', 2250)
             macro_ranges = {
                 'protein': {'min': 0.20, 'max': 0.30},
                 'fat': {'min': 0.20, 'max': 0.35},
@@ -643,22 +644,25 @@ class MealRecommender:
         """Recommend a meal plan with 3 days of franchise meals and 4 days of dining hall meals"""
         # Define macro ranges based on goal
         goal = preferences.get('goal', 'maintain').lower()
+        
+        # Get target calories from preferences
+        target_calories = preferences.get('target_calories')
+        if target_calories is None:
+            raise ValueError("Target calories must be provided in preferences")
+        
         if goal == 'maintain':
-            target_calories = 2250  # Middle of 2000-2500 range
             macro_ranges = {
                 'protein': {'min': 0.20, 'max': 0.30},  # 20-30%
                 'fat': {'min': 0.20, 'max': 0.35},      # 20-35%
                 'carbs': {'min': 0.40, 'max': 0.50}     # 40-50%
             }
         elif goal == 'lose':
-            target_calories = 1750  # Middle of 1500-2000 range
             macro_ranges = {
                 'protein': {'min': 0.30, 'max': 0.40},  # 30-40%
                 'fat': {'min': 0.20, 'max': 0.35},      # 20-35%
                 'carbs': {'min': 0.45, 'max': 0.55}     # 45-55%
             }
         else:  # gain
-            target_calories = 2750  # Middle of 2250-3250 range
             macro_ranges = {
                 'protein': {'min': 0.25, 'max': 0.35},  # 25-35%
                 'fat': {'min': 0.30, 'max': 0.40},      # 30-40%
@@ -684,8 +688,9 @@ class MealRecommender:
             }
 
         meal_plan = []
-        used_meals = set()
+        used_meals = set()  # Track all meals used in the plan
         used_restaurants = set()  # Track used restaurants for franchise days
+        used_meal_names = set()  # Track meal names to prevent duplicates
         
         # Create 3 franchise days
         for day in range(3):
@@ -706,14 +711,16 @@ class MealRecommender:
                                  if m['mealId'] not in used_meals 
                                  and m['restaurantName'] not in used_restaurants
                                  and m['category'] == 'Franchise'
-                                 and m['mealType'].lower() == meal_type.lower()]
+                                 and m['mealType'].lower() == meal_type.lower()
+                                 and m['mealName'] not in used_meal_names]
                 
                 if not available_meals:
                     # If no new restaurants available, allow previously used ones
                     available_meals = [m for m in self.meals 
                                      if m['mealId'] not in used_meals 
                                      and m['category'] == 'Franchise'
-                                     and m['mealType'].lower() == meal_type.lower()]
+                                     and m['mealType'].lower() == meal_type.lower()
+                                     and m['mealName'] not in used_meal_names]
                 
                 if available_meals:
                     # Group meals by restaurant first
@@ -751,10 +758,12 @@ class MealRecommender:
                                         print(f"Warning: Meal {meal['mealName']} has type {meal['mealType']} but is being assigned to {meal_type}")
                                         continue
                                     selected_meals.append(meal)
+                                    used_meals.add(meal['mealId'])
+                                    used_meal_names.add(meal['mealName'])
                                     current_totals['calories'] += meal.get('calories', 0)
                                     current_totals['protein'] += meal.get('protein', 0)
                                     current_totals['fat'] += meal.get('fat', 0)
-                                    current_totals['carbohydrate'] += meal.get('carbohydrate', 0)
+                                    current_totals['carbs'] += meal.get('carbohydrate', 0)
                             
                             if selected_meals:
                                 selected_restaurant = restaurant
