@@ -3,6 +3,9 @@ from meal_recommender import MealRecommender
 import json
 from datetime import datetime
 import random
+from dotenv import load_dotenv
+import os
+from pymongo import MongoClient
 
 # Define meal options by category
 MEAL_OPTIONS = {
@@ -322,10 +325,88 @@ def modify_meal_plan(meal_plan, option, meals_to_remove):
     
     return meal_plan
 
+def get_mongodb_data():
+    """Get data directly from MongoDB"""
+    # Load environment variables
+    load_dotenv()
+    
+    # Get MongoDB URI from environment
+    mongo_uri = os.getenv('MONGO_URI')
+    if not mongo_uri:
+        raise ValueError("MONGO_URI environment variable not set")
+    
+    try:
+        # Connect to MongoDB
+        print("Connecting to MongoDB...")
+        client = MongoClient(mongo_uri)
+        
+        # Test the connection
+        client.admin.command('ping')
+        print("Successfully connected to MongoDB!")
+        
+        # Create or get the database
+        db = client.test
+        print(f"Using database: {db.name}")
+        
+        # Get the restaurants collection
+        restaurants_collection = db.restaurants
+        
+        # Get all menu items using aggregation pipeline
+        pipeline = [
+            {"$match": {"campus": {"$in": ["UMD"]}}},
+            {"$unwind": "$menu"},
+            {"$unwind": "$menu.items"},
+            {
+                "$lookup": {
+                    "from": "meals",
+                    "localField": "menu.items",
+                    "foreignField": "_id",
+                    "as": "mealDetails"
+                }
+            },
+            {"$unwind": "$mealDetails"},
+            {"$match": {"mealDetails.nutrients.calories": {"$gt": 0}}},
+            {"$match": {"mealDetails._id": {"$ne": None}}},
+            {
+                "$project": {
+                    "mealName": "$mealDetails.name",
+                    "mealType": "$mealDetails.type",
+                    "ingredients": "$mealDetails.ingredients",
+                    "allergens": "$mealDetails.allergens",
+                    "dietaryPreferences": "$mealDetails.dietaryPreferences",
+                    "serving": "$mealDetails.serving",
+                    "calories": "$mealDetails.nutrients.calories",
+                    "protein": "$mealDetails.nutrients.protein",
+                    "fat": "$mealDetails.nutrients.fat",
+                    "carbohydrate": "$mealDetails.nutrients.carbohydrate",
+                    "restaurantName": "$name",
+                    "restaurantId": "$_id",
+                    "category": "$category",
+                    "mealId": "$mealDetails._id"
+                }
+            }
+        ]
+        
+        menu_items = list(restaurants_collection.aggregate(pipeline))
+        print(f"\nFetched {len(menu_items)} menu items from MongoDB")
+        return menu_items
+        
+    except Exception as e:
+        print(f"An error occurred while connecting to MongoDB: {str(e)}")
+        raise
+
 def main():
     try:
-        # Load the recommender system
-        recommender = MealRecommender("test2.json")
+        # Get data directly from MongoDB
+        menu_items = get_mongodb_data()
+        
+        # Save to temporary JSON file for the recommender
+        temp_json = 'temp_menu_data.json'
+        with open(temp_json, 'w', encoding='utf-8') as f:
+            json.dump(menu_items, f, default=str, indent=2)
+        
+        # Initialize the recommender with the temporary data
+        recommender = MealRecommender(temp_json)
 
         # Get user's weight goal
         goal = get_weight_goal()
@@ -364,10 +445,9 @@ def main():
         # Display the modified meal plan
         recommender.display_meal_plan(modified_meal_plan)
 
-    except FileNotFoundError:
-        print("Error: Could not find the meal data file (test2.json)")
-    except json.JSONDecodeError:
-        print("Error: Invalid JSON format in the meal data file")
+        # Clean up temporary file
+        os.remove(temp_json)
+
     except Exception as e:
         print(f"An unexpected error occurred: {str(e)}")
         import traceback

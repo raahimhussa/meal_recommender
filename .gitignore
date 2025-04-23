@@ -1,0 +1,34 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Data files
+*.json
+!requirements.json  # Keep this if it's needed for the project
+
+# Personal data
+student_*.json
+weekly_history.json
+
+# Test files
+test*.json
+
+# Notes and temporary files
+notes.txt
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db 
