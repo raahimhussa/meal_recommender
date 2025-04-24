@@ -6,6 +6,7 @@ import random
 from dotenv import load_dotenv
 import os
 from pymongo import MongoClient
+from run_recommender import modify_meal_plan
 
 app = Flask(__name__)
 
@@ -93,8 +94,8 @@ def format_meal_plan(meal_plan):
             'fat': 0
         }
         
-        for meal_type in ['breakfast', 'lunch', 'dinner']:
-            if meal_type in day['meals_by_type'] and day['meals_by_type'][meal_type]:
+        for meal_type in day['meals_by_type']:
+            if day['meals_by_type'][meal_type]:
                 meals = day['meals_by_type'][meal_type]
                 meal_totals = {
                     'calories': 0,
@@ -137,43 +138,12 @@ def format_meal_plan(meal_plan):
 @app.route('/api/meal-recommendations', methods=['GET'])
 def get_meal_recommendations():
     try:
-        # Get query parameters
-        goal = request.args.get('goal', 'maintain')
-        target_calories = request.args.get('target_calories', 3789, type=int)
-        allergies = request.args.get('allergies', '').split(',') if request.args.get('allergies') else []
-        exercise = request.args.get('exercise', 'Regular exercise')
-        preferred_locations = request.args.get('locations', '').split(',') if request.args.get('locations') else []
-        novelty_factor = request.args.get('novelty_factor', 0.5, type=float)
-        dietary_restrictions = request.args.get('dietary_restrictions', '').split(',') if request.args.get('dietary_restrictions') else []
-        days = request.args.get('days', 7, type=int)
-        
-        # Validate goal
-        if goal not in ['maintain', 'lose', 'gain']:
-            return jsonify({
-                'status': 'error',
-                'message': 'Invalid goal. Must be one of: maintain, lose, gain'
-            }), 400
-            
-        # Validate target calories
-        if target_calories < 1000 or target_calories > 5000:
-            return jsonify({
-                'status': 'error',
-                'message': 'Target calories must be between 1000 and 5000'
-            }), 400
-            
-        # Validate novelty factor
-        if novelty_factor < 0 or novelty_factor > 1:
-            return jsonify({
-                'status': 'error',
-                'message': 'Novelty factor must be between 0 and 1'
-            }), 400
-            
-        # Validate days
-        if days < 1 or days > 14:
-            return jsonify({
-                'status': 'error',
-                'message': 'Days must be between 1 and 14'
-            }), 400
+        # Hardcoded values
+        goal = 'gain'
+        target_calories = 2000
+        days = 7
+        option = 1  # 19 meals (2 days with 2 meals, 5 days with 3 meals)
+        meals_to_remove = 'breakfast'  # Single meal type to remove
 
         # Get data directly from MongoDB
         menu_items = get_mongodb_data()
@@ -186,15 +156,10 @@ def get_meal_recommendations():
         # Initialize the recommender with the temporary data
         recommender = MealRecommender(temp_json)
 
-        # User preferences from query parameters
+        # User preferences with hardcoded values
         user_prefs = {
             'goal': goal,
-            'target_calories': target_calories,
-            'allergies': allergies,
-            'exercise': exercise,
-            'preferred_locations': preferred_locations,
-            'novelty_factor': novelty_factor,
-            'dietary_restrictions': dietary_restrictions
+            'target_calories': target_calories
         }
 
         user_id = "student_123"
@@ -202,8 +167,11 @@ def get_meal_recommendations():
         # Generate meal plan
         meal_plan = recommender.recommend_meal_plan(user_id, user_prefs, days=days)
         
+        # Modify meal plan based on option and meals to remove
+        modified_meal_plan = modify_meal_plan(meal_plan, option, meals_to_remove)
+        
         # Format the meal plan
-        formatted_plan = format_meal_plan(meal_plan)
+        formatted_plan = format_meal_plan(modified_meal_plan)
         
         # Clean up temporary file
         os.remove(temp_json)
@@ -213,12 +181,9 @@ def get_meal_recommendations():
             'parameters': {
                 'goal': goal,
                 'target_calories': target_calories,
-                'allergies': allergies,
-                'exercise': exercise,
-                'preferred_locations': preferred_locations,
-                'novelty_factor': novelty_factor,
-                'dietary_restrictions': dietary_restrictions,
-                'days': days
+                'days': days,
+                'option': option,
+                'meals_to_remove': meals_to_remove
             },
             'meal_plan': formatted_plan
         })
