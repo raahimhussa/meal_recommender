@@ -425,6 +425,9 @@ def main():
             'dietary_restrictions': []
         }
 
+        # Set user preferences
+        recommender.set_user_preferences(user_prefs)
+
         user_id = "student_123"
 
         # Get meal plan option
@@ -442,8 +445,11 @@ def main():
         # Modify meal plan based on user's choice
         modified_meal_plan = modify_meal_plan(meal_plan, option, meals_to_remove)
         
-        # Display the modified meal plan
-        recommender.display_meal_plan(modified_meal_plan)
+        # Get the formatted meal plan
+        formatted_plan = recommender.display_meal_plan(modified_meal_plan)
+        
+        # Print the formatted plan as JSON
+        print(json.dumps(formatted_plan, indent=2))
 
         # Clean up temporary file
         os.remove(temp_json)

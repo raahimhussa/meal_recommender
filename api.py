@@ -135,15 +135,52 @@ def format_meal_plan(meal_plan):
     
     return formatted_plan
 
-@app.route('/api/meal-recommendations', methods=['GET'])
+@app.route('/api/meal-recommendations', methods=['POST'])
 def get_meal_recommendations():
     try:
-        # Hardcoded values
-        goal = 'gain'
-        target_calories = 2000
-        days = 7
-        option = 1  # 19 meals (2 days with 2 meals, 5 days with 3 meals)
-        meals_to_remove = 'breakfast'  # Single meal type to remove
+        # Get data from request body
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'No data provided in request body'
+            }), 400
+
+        # Get parameters from request
+        goal = data.get('goal', 'maintain')
+        target_calories = data.get('target_calories', 2000)
+        days = data.get('days', 7)
+        option = data.get('option', 1)
+        
+        # Get meal preferences based on option
+        if option == 1:
+            # For 19 meals option, get preferred meals
+            preferred_meals = data.get('preferred_meals', ['breakfast', 'lunch', 'dinner'])
+            if len(preferred_meals) == 3:
+                # If all three selected, randomly select one meal to remove from 2 random days
+                all_meals = ['breakfast', 'lunch', 'dinner']
+                meals_to_remove = random.sample(all_meals, 1)  # Randomly select one meal to remove
+                days_to_modify = random.sample(range(3), 2)  # First 3 days are franchise days
+            elif len(preferred_meals) == 2:
+                # If two selected, remove the unselected one
+                all_meals = ['breakfast', 'lunch', 'dinner']
+                meals_to_remove = [meal for meal in all_meals if meal not in preferred_meals]
+                days_to_modify = range(3)  # All franchise days
+            else:
+                # If one selected, randomly select one meal from unselected types
+                all_meals = ['breakfast', 'lunch', 'dinner']
+                unselected = [meal for meal in all_meals if meal not in preferred_meals]
+                meals_to_remove = random.sample(unselected, 1)  # Randomly select one meal from unselected
+                days_to_modify = range(3)  # All franchise days
+        elif option == 2:
+            # For 14 meals option, get which meal to remove
+            meal_to_remove = data.get('meal_to_remove', random.choice(['breakfast', 'lunch', 'dinner']))
+            meals_to_remove = [meal_to_remove]
+            days_to_modify = range(7)  # All days
+        else:  # option 3
+            # For 7 meals option, get which two meals to remove
+            meals_to_remove = data.get('meals_to_remove', random.sample(['breakfast', 'lunch', 'dinner'], 2))
+            days_to_modify = range(7)  # All days
 
         # Get data directly from MongoDB
         menu_items = get_mongodb_data()
@@ -156,11 +193,19 @@ def get_meal_recommendations():
         # Initialize the recommender with the temporary data
         recommender = MealRecommender(temp_json)
 
-        # User preferences with hardcoded values
+        # User preferences
         user_prefs = {
             'goal': goal,
-            'target_calories': target_calories
+            'target_calories': target_calories,
+            'allergies': [],
+            'exercise': 'Regular exercise',
+            'preferred_locations': [],
+            'novelty_factor': 0.5,
+            'dietary_restrictions': []
         }
+
+        # Set user preferences
+        recommender.set_user_preferences(user_prefs)
 
         user_id = "student_123"
         
@@ -168,25 +213,18 @@ def get_meal_recommendations():
         meal_plan = recommender.recommend_meal_plan(user_id, user_prefs, days=days)
         
         # Modify meal plan based on option and meals to remove
-        modified_meal_plan = modify_meal_plan(meal_plan, option, meals_to_remove)
+        for day_idx in days_to_modify:
+            for meal_type in meals_to_remove:
+                if meal_type in meal_plan[day_idx]['meals_by_type']:
+                    del meal_plan[day_idx]['meals_by_type'][meal_type]
         
-        # Format the meal plan
-        formatted_plan = format_meal_plan(modified_meal_plan)
+        # Get the formatted meal plan
+        formatted_plan = recommender.display_meal_plan(meal_plan)
         
         # Clean up temporary file
         os.remove(temp_json)
         
-        return jsonify({
-            'status': 'success',
-            'parameters': {
-                'goal': goal,
-                'target_calories': target_calories,
-                'days': days,
-                'option': option,
-                'meals_to_remove': meals_to_remove
-            },
-            'meal_plan': formatted_plan
-        })
+        return jsonify(formatted_plan)
 
     except Exception as e:
         return jsonify({

@@ -21,6 +21,17 @@ class MealRecommender:
                 'dinner': ['subway', 'chick-fil-a', 'panera bread', 'panda express']
             }
             
+            # Initialize user preferences
+            self.user_preferences = {
+                'target_calories': 2000,  # Default value
+                'goal': 'maintain',
+                'allergies': [],
+                'exercise': 'Regular exercise',
+                'preferred_locations': [],
+                'novelty_factor': 0.5,
+                'dietary_restrictions': []
+            }
+            
             # Ensure all meals have required fields
             for meal in self.meals:
                 meal['mealName'] = meal.get('mealName', 'Unnamed Meal')
@@ -926,11 +937,15 @@ class MealRecommender:
 
     def display_meal_plan(self, meal_plan):
         """Display the meal plan with macro information"""
-        for day in meal_plan:
+        days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        formatted_plan = []
+        
+        # Get target calories from user preferences
+        target_calories = self.user_preferences.get('target_calories', 2000)  # Default to 2000 if not set
+        
+        for day_idx, day in enumerate(meal_plan):
             day_num = day['day']
             category = day['category']
-            print(f"\nDay {day_num} ({category})")
-            print("-" * 30)
             
             daily_totals = {
                 'calories': 0,
@@ -939,48 +954,41 @@ class MealRecommender:
                 'fat': 0
             }
             
+            day_meals = {
+                'day': days_of_week[day_idx],
+                'breakfast': [],
+                'lunch': [],
+                'dinner': []
+            }
+            
             for meal_type in ['breakfast', 'lunch', 'dinner']:
                 if meal_type in day['meals_by_type'] and day['meals_by_type'][meal_type]:
                     meals = day['meals_by_type'][meal_type]
-                    print(f"\n{meal_type.title()}:")
-                    
-                    meal_totals = {
-                        'calories': 0,
-                        'protein': 0,
-                        'carbs': 0,
-                        'fat': 0
-                    }
                     
                     for meal in meals:
-                        print(f"  - {meal['mealName']} ({meal['restaurantName']})")
-                        print(f"    Calories: {meal.get('calories', 0)}")
-                        print(f"    Protein: {meal.get('protein', 0)}g")
-                        print(f"    Carbs: {meal.get('carbohydrate', 0)}g")
-                        print(f"    Fat: {meal.get('fat', 0)}g")
+                        # Add meal to the appropriate meal type
+                        day_meals[meal_type].append(meal)
                         
-                        meal_totals['calories'] += meal.get('calories', 0)
-                        meal_totals['protein'] += meal.get('protein', 0)
-                        meal_totals['carbs'] += meal.get('carbohydrate', 0)
-                        meal_totals['fat'] += meal.get('fat', 0)
-                    
-                    # Add to daily totals
-                    daily_totals['calories'] += meal_totals['calories']
-                    daily_totals['protein'] += meal_totals['protein']
-                    daily_totals['carbs'] += meal_totals['carbs']
-                    daily_totals['fat'] += meal_totals['fat']
-                    
-                    # Display meal type totals and percentages
-                    if meal_totals['calories'] > 0:
-                        print(f"\n  {meal_type.title()} Totals:")
-                        print(f"  Calories: {meal_totals['calories']}")
-                        print(f"  Protein: {meal_totals['protein']}g ({(meal_totals['protein'] * 4 / meal_totals['calories']) * 100:.1f}%)")
-                        print(f"  Carbs: {meal_totals['carbs']}g ({(meal_totals['carbs'] * 4 / meal_totals['calories']) * 100:.1f}%)")
-                        print(f"  Fat: {meal_totals['fat']}g ({(meal_totals['fat'] * 9 / meal_totals['calories']) * 100:.1f}%)")
+                        # Update daily totals
+                        daily_totals['calories'] += meal.get('calories', 0)
+                        daily_totals['protein'] += meal.get('protein', 0)
+                        daily_totals['carbs'] += meal.get('carbohydrate', 0)
+                        daily_totals['fat'] += meal.get('fat', 0)
             
-            # Display daily totals and percentages
-            if daily_totals['calories'] > 0:
-                print("\nDaily Totals:")
-                print(f"Calories: {daily_totals['calories']}")
-                print(f"Protein: {daily_totals['protein']}g ({(daily_totals['protein'] * 4 / daily_totals['calories']) * 100:.1f}%)")
-                print(f"Carbs: {daily_totals['carbs']}g ({(daily_totals['carbs'] * 4 / daily_totals['calories']) * 100:.1f}%)")
-                print(f"Fat: {daily_totals['fat']}g ({(daily_totals['fat'] * 9 / daily_totals['calories']) * 100:.1f}%)")
+            # Add daily totals to the day's meals using target calories for BMR
+            day_meals['caloriesBMR'] = target_calories
+            day_meals['caloriesProvided'] = daily_totals['calories']
+            day_meals['proteinProvided'] = daily_totals['protein']
+            day_meals['fatProvided'] = daily_totals['fat']
+            day_meals['carbsProvided'] = daily_totals['carbs']
+            
+            formatted_plan.append(day_meals)
+        
+        return {
+            "message": "Weekly diet plan generated successfully.",
+            "weeklyPlan": formatted_plan
+        }
+
+    def set_user_preferences(self, preferences):
+        """Update user preferences"""
+        self.user_preferences.update(preferences)
